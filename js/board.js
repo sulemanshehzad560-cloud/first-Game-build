@@ -1,35 +1,62 @@
-/* Canvas renderer for a layered Mahjong board: glossy 3D tiles, hover lift, selection,
-   matched pairs that fly together and burst, cascading entry and flip-shuffles. */
+/* Canvas renderer for a layered Mahjong board.
+   Tiles are pre-rendered sprites: a soft cast shadow, a two-layer body (bone + dyed back)
+   with a beveled, grained face, and symbols carved into that face. Matches play a
+   "slam": both tiles lift, rush together, collide with a hit-stop, then fuse and vanish. */
 (function (global) {
   'use strict';
   var T = global.MahjongTiles;
   var reducedMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var DEPTH = 0.26; // tile thickness as a fraction of half-tile width
+  var DEPTH = 0.3;  // tile thickness as a fraction of half-tile width
   var ASPECT = 1.3; // tile height / width
-  var BURST = ['#ffd166', '#ff5fa2', '#38d6ff', '#7cffcb', '#b388ff', '#ff8a3d'];
+  var M = 3;        // sprite margin in CSS px
 
   function rr(g, x, y, w, h, r) {
     g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
     g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
   }
-  function easeOutBack(t) { var c = 1.6; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
-  function easeIn(t) { return t * t; }
   function clamp01(t) { return t < 0 ? 0 : t > 1 ? 1 : t; }
+  function easeOutBack(t) { var c = 1.6; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
+  function easeInCubic(t) { return t * t * t; }
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function hexA(h, a) { var v = parseInt(h.slice(1), 16); return 'rgba(' + (v >> 16 & 255) + ',' + (v >> 8 & 255) + ',' + (v & 255) + ',' + a + ')'; }
+  function canvas(w, h) { var c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
+  function tint(src, color) {
+    var c = canvas(src.width, src.height), g = c.getContext('2d');
+    g.drawImage(src, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+    return c;
+  }
 
-  function TileBoard(canvas) {
-    this.c = canvas; this.g = canvas.getContext('2d');
+  var grain = null;
+  function grainPattern(g) {
+    if (!grain) {
+      grain = canvas(96, 96);
+      var gg = grain.getContext('2d'), img = gg.createImageData(96, 96);
+      for (var i = 0; i < img.data.length; i += 4) {
+        var v = 128 + (Math.random() - 0.5) * 120;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+      }
+      gg.putImageData(img, 0, 0);
+      gg.globalAlpha = 0.25; gg.strokeStyle = '#6b5b3a';
+      for (var k = 0; k < 6; k++) { gg.beginPath(); gg.moveTo(Math.random() * 96, 0); gg.bezierCurveTo(Math.random() * 96, 32, Math.random() * 96, 64, Math.random() * 96, 96); gg.stroke(); }
+    }
+    return g.createPattern(grain, 'repeat');
+  }
+
+  function TileBoard(canvasEl) {
+    this.c = canvasEl; this.g = canvasEl.getContext('2d');
     this.stat = document.createElement('canvas'); this.sg = this.stat.getContext('2d');
     this.lay = null; this.kinds = null; this.present = null;
     this.theme = T.THEMES[0]; this.accent = this.theme.accent;
     this.sel = -1; this.hover = -1; this.partners = []; this.hint = []; this.hintUntil = 0; this.showFree = false;
-    this.flash = []; this.fx = []; this.rings = []; this.particles = []; this.sprites = new Map();
-    this.entry = null; this.flip = null; this.dirty = true; this.freeCache = null;
+    this.flash = []; this.fx = []; this.rings = []; this.flashes = []; this.particles = []; this.sprites = new Map();
+    this.entry = null; this.flip = null; this.dirty = true; this.shake = 0;
+    this.fw = 40; this.fh = 52; this.dz = 6; this.dpr = 1;
   }
 
   TileBoard.prototype.set = function (lay, kinds, present, showFree, animate) {
     this.lay = lay; this.kinds = kinds; this.present = present; this.showFree = !!showFree;
-    this.sel = -1; this.hover = -1; this.partners = []; this.hint = []; this.flash = []; this.fx = []; this.rings = []; this.particles = [];
-    this.flip = null;
+    this.sel = -1; this.hover = -1; this.partners = []; this.hint = []; this.flash = [];
+    this.fx = []; this.rings = []; this.flashes = []; this.particles = []; this.flip = null; this.shake = 0;
     this.resize();
     if (animate !== false && !reducedMotion) {
       var stagger = Math.min(14, 900 / lay.n), delays = new Float32Array(lay.n);
@@ -38,9 +65,7 @@
     } else this.entry = null;
   };
 
-  TileBoard.prototype.setTheme = function (theme) {
-    this.theme = theme; this.accent = theme.accent; this.sprites.clear(); this.dirty = true;
-  };
+  TileBoard.prototype.setTheme = function (theme) { this.theme = theme; this.accent = theme.accent; this.sprites.clear(); this.dirty = true; };
 
   TileBoard.prototype.resize = function () {
     var rect = this.c.getBoundingClientRect(), dpr = Math.min(global.devicePixelRatio || 1, 2.5);
@@ -49,13 +74,13 @@
     this.c.height = this.stat.height = Math.max(1, Math.round(rect.height * dpr));
     if (this.lay) {
       var L = this.lay, spanX = L.maxX - L.minX, spanY = L.maxY - L.minY, layers = L.maxZ + 1;
-      var u = Math.min(rect.width / (spanX + layers * DEPTH + 0.4), rect.height / (spanY * ASPECT + layers * DEPTH + 0.4));
+      var u = Math.min(rect.width / (spanX + layers * DEPTH + 0.6), rect.height / (spanY * ASPECT + layers * DEPTH + 0.6));
       this.ux = u; this.uy = u * ASPECT; this.dz = u * DEPTH;
       this.fw = 2 * u; this.fh = 2 * this.uy;
       var bw = spanX * u + layers * this.dz, bh = spanY * this.uy + layers * this.dz;
       this.ox = (rect.width - bw) / 2; this.oy = (rect.height - bh) / 2;
-      this.sprites.clear();
     }
+    this.sprites.clear();
     this.dirty = true;
   };
 
@@ -82,80 +107,157 @@
 
   TileBoard.prototype.isFree = function (i) { return global.Mahjong.isFree(this.lay, this.present, i); };
 
-  TileBoard.prototype.sprite = function (kind) {
+  // ---------------------------------------------------------------- sprites
+  TileBoard.prototype.base = function () {
+    if (this.sprites.has('base')) return this.sprites.get('base');
+    var th = this.theme, S = this.dpr, fw = this.fw, fh = this.fh, d = this.dz, rad = fw * 0.12;
+    var W = fw + d + M * 2, H = fh + d + M * 2, c = canvas(W * S, H * S), g = c.getContext('2d');
+    g.scale(S, S);
+    var fx = M + d, fy = M;
+    // Body: stack thin slices from the back layer up to the face.
+    var step = Math.max(0.35, d / 40);
+    for (var k = d; k >= 0; k -= step) {
+      var t = k / d;
+      g.fillStyle = t > 0.42 ? T.mix(th.back[0], th.back[1], (t - 0.42) / 0.58) : T.mix(th.body[0], th.body[1], t / 0.42);
+      rr(g, fx - k, fy + k, fw, fh, rad); g.fill();
+    }
+    // Light from the top-left: the bottom side falls into shade.
+    g.save(); g.globalCompositeOperation = 'source-atop';
+    var shade = g.createLinearGradient(0, fy + fh * 0.6, 0, fy + fh + d);
+    shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,0.35)');
+    g.fillStyle = shade; g.fillRect(0, 0, W, H);
+    var seam = g.createLinearGradient(fx - d, 0, fx, 0);
+    seam.addColorStop(0, 'rgba(255,255,255,0.12)'); seam.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = seam; g.fillRect(0, 0, fx, H);
+    g.restore();
+    // Face.
+    rr(g, fx, fy, fw, fh, rad);
+    var face = g.createLinearGradient(fx, fy, fx + fw, fy + fh);
+    face.addColorStop(0, th.face[0]); face.addColorStop(1, th.face[1]);
+    g.fillStyle = face; g.fill();
+    g.save(); g.clip();
+    g.globalAlpha = th.pal === 'dark' ? 0.08 : 0.06; g.fillStyle = grainPattern(g); g.fillRect(fx, fy, fw, fh);
+    g.globalAlpha = 1;
+    // Bevel ring: bright on the lit top-left edge, dark on the bottom-right.
+    var b = fw * 0.06;
+    g.beginPath();
+    rr(g, fx, fy, fw, fh, rad);
+    g.moveTo(fx + b + rad * 0.7, fy + b);
+    g.arcTo(fx + b, fy + b, fx + b, fy + fh - b, rad * 0.7); g.arcTo(fx + b, fy + fh - b, fx + fw - b, fy + fh - b, rad * 0.7);
+    g.arcTo(fx + fw - b, fy + fh - b, fx + fw - b, fy + b, rad * 0.7); g.arcTo(fx + fw - b, fy + b, fx + b, fy + b, rad * 0.7); g.closePath();
+    var bev = g.createLinearGradient(fx, fy, fx + fw, fy + fh);
+    bev.addColorStop(0, 'rgba(255,255,255,0.85)'); bev.addColorStop(0.45, 'rgba(255,255,255,0.1)'); bev.addColorStop(1, 'rgba(60,40,20,0.28)');
+    g.fillStyle = bev; g.fill('evenodd');
+    // Soft sheen and a crisp specular glint near the top edge.
+    var sheen = g.createRadialGradient(fx + fw * 0.25, fy + fh * 0.18, 0, fx + fw * 0.25, fy + fh * 0.18, fw * 0.9);
+    sheen.addColorStop(0, 'rgba(255,255,255,0.32)'); sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sheen; g.fillRect(fx, fy, fw, fh);
+    var glint = g.createLinearGradient(0, fy + b * 0.3, 0, fy + b * 2.2);
+    glint.addColorStop(0, 'rgba(255,255,255,0.7)'); glint.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = glint; g.fillRect(fx + rad, fy + b * 0.3, fw - rad * 2, b * 1.9);
+    g.restore();
+    rr(g, fx + 0.5, fy + 0.5, fw - 1, fh - 1, rad);
+    g.strokeStyle = th.pal === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(90,70,40,0.28)'; g.lineWidth = 1; g.stroke();
+    var s = { c: c, w: W, h: H, dim: tint(c, 'rgba(8,12,22,0.4)') };
+    this.sprites.set('base', s);
+    return s;
+  };
+
+  TileBoard.prototype.shadow = function () {
+    if (this.sprites.has('shadow')) return this.sprites.get('shadow');
+    var S = this.dpr, fw = this.fw, fh = this.fh, blur = fw * 0.22, pad = blur * 2;
+    var W = fw + pad * 2, H = fh + pad * 2, c = canvas(W * S, H * S), g = c.getContext('2d');
+    g.scale(S, S);
+    g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = blur * S; g.shadowOffsetX = 2000 * S;
+    rr(g, pad - 2000, pad, fw, fh, fw * 0.14); g.fillStyle = '#000'; g.fill();
+    var s = { c: c, w: W, h: H, pad: pad };
+    this.sprites.set('shadow', s);
+    return s;
+  };
+
+  /** Symbols carved into the face: lit lip, groove shadow and enamel paint. */
+  TileBoard.prototype.face = function (kind) {
     if (this.sprites.has(kind)) return this.sprites.get(kind);
-    var pad = this.fw * 0.1, w = this.fw - pad * 2, h = this.fh - pad * 2, dpr = this.dpr;
-    var c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(w * dpr)); c.height = Math.max(1, Math.round(h * dpr));
-    var g = c.getContext('2d'); g.scale(dpr, dpr);
-    T.drawFace(g, kind, w, h, this.theme.pal);
-    var s = { c: c, pad: pad, w: w, h: h };
+    var S = this.dpr, pad = this.fw * 0.11, w = this.fw - pad * 2, h = this.fh - pad * 2, dark = this.theme.pal === 'dark';
+    var paint = canvas(w * S, h * S), pg = paint.getContext('2d');
+    pg.scale(S, S);
+    T.drawFace(pg, kind, w, h, this.theme.pal);
+    pg.globalCompositeOperation = 'source-atop';
+    var enamel = pg.createLinearGradient(0, 0, 0, h);
+    enamel.addColorStop(0, 'rgba(255,255,255,0.22)'); enamel.addColorStop(0.5, 'rgba(255,255,255,0)'); enamel.addColorStop(1, 'rgba(0,0,0,0.15)');
+    pg.fillStyle = enamel; pg.fillRect(0, 0, w, h);
+    var out = canvas(paint.width, paint.height), og = out.getContext('2d'), o = Math.max(0.6, this.fw * 0.014) * S;
+    og.globalAlpha = dark ? 0.35 : 0.95; og.drawImage(tint(paint, '#ffffff'), o, o);
+    og.globalAlpha = dark ? 0.6 : 0.3; og.drawImage(tint(paint, '#000000'), -o * 0.6, -o * 0.6);
+    og.globalAlpha = 1; og.drawImage(paint, 0, 0);
+    var rim = tint(paint, '#000000'), rg = rim.getContext('2d');
+    rg.globalCompositeOperation = 'destination-out'; rg.drawImage(paint, o * 1.2, o * 1.2);
+    og.globalAlpha = 0.45; og.drawImage(rim, 0, 0);
+    var s = { c: out, pad: pad, w: w, h: h };
     this.sprites.set(kind, s);
     return s;
   };
 
-  /** o: { state: ''|'blocked'|'selected'|'hover', lift, scaleX, alpha, glow } */
+  // ---------------------------------------------------------------- drawing
+  /** Cast shadow for a tile whose face sits at r (scaled by r.w / fw). */
+  TileBoard.prototype.drawShadow = function (g, r, o) {
+    var sh = this.shadow(), sc = r.w / this.fw, lift = (o && o.lift) || 0, d = this.dz;
+    g.save();
+    g.globalAlpha = (o && o.alpha != null ? o.alpha : 1) * Math.max(0.35, 0.8 - lift / (this.fw * 1.5));
+    var grow = 1 + lift / this.fw * 0.25;
+    var w = sh.w * sc * grow, h = sh.h * sc * grow;
+    var cx = r.x + r.w / 2 - d * 1.2 - lift * 0.15, cy = r.y + r.h / 2 + d * 1.4 + lift * 0.35;
+    g.drawImage(sh.c, cx - w / 2, cy - h / 2, w, h);
+    g.restore();
+  };
+
+  /** o: { state, lift, scaleX, alpha, rot, glow, white, noShadow } */
   TileBoard.prototype.drawTile = function (g, r, kind, o) {
     o = o || {};
-    var th = this.theme, lift = o.lift || 0, d = this.dz + lift, rad = r.w * 0.13;
-    var x = r.x + lift * 0.5, y = r.y - lift;
+    if (!o.noShadow) this.drawShadow(g, r, o);
+    var base = this.base(), sc = r.w / this.fw, lift = o.lift || 0, d = this.dz * sc;
+    var x = r.x + lift * 0.5, y = r.y - lift, rad = r.w * 0.12;
     g.save();
     if (o.alpha != null) g.globalAlpha = o.alpha;
-    if (o.scaleX != null && o.scaleX !== 1) { var cx = x + r.w / 2; g.translate(cx, 0); g.scale(Math.max(0.02, o.scaleX), 1); g.translate(-cx, 0); }
-    // Back and body: two layers of thickness under the face, like a real bone-and-bamboo tile.
-    g.save();
-    g.shadowColor = o.glow || 'rgba(0,0,0,0.45)'; g.shadowBlur = o.glow ? this.fw * 0.5 : d * 1.8;
-    g.shadowOffsetX = o.glow ? 0 : -d * 0.4; g.shadowOffsetY = o.glow ? 0 : d * 0.7;
-    rr(g, x - d, y + d, r.w, r.h, rad);
-    var back = g.createLinearGradient(x - d, y + d, x - d + r.w, y + d + r.h);
-    back.addColorStop(0, th.back[0]); back.addColorStop(1, th.back[1]);
-    g.fillStyle = back; g.fill();
-    g.restore();
-    rr(g, x - d * 0.5, y + d * 0.5, r.w, r.h, rad); g.fillStyle = th.body; g.fill();
-    rr(g, x, y, r.w, r.h, rad);
-    var face = g.createLinearGradient(x, y, x + r.w, y + r.h);
-    face.addColorStop(0, th.face[0]); face.addColorStop(1, th.face[1]);
-    g.fillStyle = face; g.fill();
-    g.strokeStyle = th.edge; g.lineWidth = 1; g.stroke();
-    var s = this.sprite(kind);
-    g.drawImage(s.c, x + s.pad, y + s.pad, s.w, s.h);
-    // Gloss across the top of the face.
-    rr(g, x + r.w * 0.06, y + r.h * 0.04, r.w * 0.88, r.h * 0.4, rad * 0.8);
-    var gloss = g.createLinearGradient(0, y, 0, y + r.h * 0.44);
-    gloss.addColorStop(0, 'rgba(255,255,255,0.42)'); gloss.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = gloss; g.fill();
-    if (o.state === 'blocked') { rr(g, x, y, r.w, r.h, rad); g.fillStyle = th.pal === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(20,30,40,0.36)'; g.fill(); }
+    var cx = x + r.w / 2, cy = y + r.h / 2;
+    if (o.rot) { g.translate(cx, cy); g.rotate(o.rot); g.translate(-cx, -cy); }
+    if (o.scaleX != null && o.scaleX !== 1) { g.translate(cx, 0); g.scale(Math.max(0.02, o.scaleX), 1); g.translate(-cx, 0); }
+    if (o.glow) { g.shadowColor = o.glow; g.shadowBlur = r.w * 0.45; }
+    var bx = x - d - M * sc, by = y - M * sc;
+    g.drawImage(base.c, bx, by, base.w * sc, base.h * sc);
+    g.shadowBlur = 0; g.shadowColor = 'transparent';
+    var f = this.face(kind);
+    g.drawImage(f.c, x + f.pad * sc, y + f.pad * sc, f.w * sc, f.h * sc);
+    if (o.state === 'blocked') g.drawImage(base.dim, bx, by, base.w * sc, base.h * sc);
+    if (o.white) { rr(g, x, y, r.w, r.h, rad); g.fillStyle = 'rgba(255,255,255,' + o.white + ')'; g.fill(); }
     if (o.state === 'selected' || o.state === 'hover') {
-      rr(g, x, y, r.w, r.h, rad);
-      if (o.state === 'selected') { g.fillStyle = hexA(this.accent, 0.22); g.fill(); }
-      g.strokeStyle = o.state === 'selected' ? this.accent : hexA(this.accent, 0.7);
-      g.lineWidth = Math.max(2, r.w * (o.state === 'selected' ? 0.07 : 0.045)); g.stroke();
+      rr(g, x - 1, y - 1, r.w + 2, r.h + 2, rad + 1);
+      g.shadowColor = this.accent; g.shadowBlur = o.state === 'selected' ? 14 : 6;
+      g.strokeStyle = o.state === 'selected' ? this.accent : hexA(this.accent, 0.75);
+      g.lineWidth = Math.max(2, r.w * (o.state === 'selected' ? 0.065 : 0.04)); g.stroke();
     }
     g.restore();
   };
 
-  function hexA(h, a) {
-    var v = parseInt(h.slice(1), 16);
-    return 'rgba(' + (v >> 16 & 255) + ',' + (v >> 8 & 255) + ',' + (v & 255) + ',' + a + ')';
-  }
-
-  TileBoard.prototype.computeFree = function () {
-    var L = this.lay, f = new Uint8Array(L.n);
-    for (var i = 0; i < L.n; i++) f[i] = this.present[i] && this.isFree(i) ? 1 : 0;
-    return f;
-  };
-
   TileBoard.prototype.drawAll = function (g, now, skip) {
-    var L = this.lay, free = this.showFree ? this.computeFree() : null, e = this.entry, f = this.flip;
-    for (var k = 0; k < L.order.length; k++) {
-      var i = L.order[k];
+    var L = this.lay, e = this.entry, f = this.flip, free = null, k, i;
+    if (this.showFree) { free = new Uint8Array(L.n); for (i = 0; i < L.n; i++) free[i] = this.present[i] && this.isFree(i) ? 1 : 0; }
+    // Draw layer by layer: a layer's shadows land on the layer below, then its tiles cover them.
+    var z = -1, batch = [];
+    var flush = function (self) {
+      batch.forEach(function (it) { self.drawShadow(g, it.r, it.o); });
+      batch.forEach(function (it) { it.o.noShadow = true; self.drawTile(g, it.r, it.kind, it.o); });
+      batch = [];
+    };
+    for (k = 0; k < L.order.length; k++) {
+      i = L.order[k];
       if (!this.present[i] || (skip && skip[i])) continue;
+      if (L.z[i] !== z) { flush(this); z = L.z[i]; }
       var r = this.rect(i), o = { state: free && !free[i] ? 'blocked' : '' }, kind = this.kinds[i];
       if (e) {
         var t = clamp01((now - e.t0 - e.delays[i]) / 420);
         if (t <= 0) continue;
-        var eb = easeOutBack(t);
-        r = { x: r.x, y: r.y - (1 - eb) * this.fh * 0.9, w: r.w, h: r.h };
+        r = { x: r.x, y: r.y - (1 - easeOutBack(t)) * this.fh * 0.9, w: r.w, h: r.h };
         o.alpha = Math.min(1, t * 2.5);
       }
       if (f) {
@@ -163,8 +265,9 @@
         o.scaleX = Math.abs(Math.cos(Math.PI * ft));
         if (ft < 0.5) kind = f.old[i];
       }
-      this.drawTile(g, r, kind, o);
+      batch.push({ r: r, o: o, kind: kind });
     }
+    flush(this);
   };
 
   TileBoard.prototype.renderStatic = function () {
@@ -189,35 +292,99 @@
   TileBoard.prototype.showHint = function (pair, ms) { this.hint = pair; this.hintUntil = performance.now() + (ms || 3000); };
   TileBoard.prototype.wrong = function (i) { this.flash.push({ i: i, t0: performance.now() }); };
   TileBoard.prototype.flipFrom = function (oldKinds) { if (!reducedMotion) this.flip = { t0: performance.now(), old: oldKinds }; this.dirty = true; };
+  TileBoard.prototype.busy = function () { return !!(this.entry || this.flip); };
 
-  /** Animate a matched pair flying together and bursting. Call after clearing present[]. */
-  TileBoard.prototype.matched = function (a, b, color) {
-    this.fx.push({ a: a, b: b, ka: this.kinds[a], kb: this.kinds[b], ra: this.rect(a), rb: this.rect(b), t0: performance.now(), color: color || this.accent });
+  // ---------------------------------------------------------------- slam
+  var RISE = 110, RUSH = 150, HOLD = 70, FUSE = 170;
+
+  /** Slam a matched pair together. Call after clearing present[]. onImpact fires at the collision. */
+  TileBoard.prototype.matched = function (a, b, color, power, onImpact) {
+    var ra = this.rect(a), rb = this.rect(b);
+    var ca = [ra.x + ra.w / 2, ra.y + ra.h / 2], cb = [rb.x + rb.w / 2, rb.y + rb.h / 2];
+    // Always meet side by side, so the pair slams face to face whatever their positions.
+    var u = cb[0] >= ca[0] ? [1, 0] : [-1, 0], ext = this.fw / 2;
+    var mx = (ca[0] + cb[0]) / 2, my = (ca[1] + cb[1]) / 2 - this.fh * 0.2;
+    this.fx.push({
+      ka: this.kinds[a], kb: this.kinds[b], ca: ca, cb: cb, u: u, m: [mx, my], ext: ext,
+      t0: performance.now(), color: color || this.accent, power: power || 1, onImpact: onImpact, hit: false
+    });
     if (this.hover === a || this.hover === b) this.hover = -1;
     this.hint = []; this.partners = []; this.dirty = true;
   };
 
-  TileBoard.prototype.burst = function (x, y, color, now) {
-    this.rings.push({ x: x, y: y, t0: now, color: color });
-    if (reducedMotion) return;
-    for (var p = 0; p < 30; p++) {
-      var ang = Math.random() * 6.283, sp = (0.08 + Math.random() * 0.22) * this.fw / 12;
-      this.particles.push({
-        x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 0.04, t0: now, life: 500 + Math.random() * 500,
-        color: p % 3 === 0 ? color : BURST[p % BURST.length], star: p % 5 === 0, rot: Math.random() * 6.283, size: this.fw * (0.05 + Math.random() * 0.05)
-      });
+  TileBoard.prototype.impact = function (e, now) {
+    var x = e.m[0], y = e.m[1], u = e.u, p = e.power, fw = this.fw, th = this.theme;
+    if (e.onImpact) e.onImpact();
+    if (reducedMotion) { this.rings.push({ x: x, y: y, t0: now, color: e.color, w: 1 }); return; }
+    this.shake = Math.min(16, this.shake + 5 + p * 3);
+    this.flashes.push({ x: x, y: y, t0: now, r: fw * (1.1 + p * 0.25) });
+    this.rings.push({ x: x, y: y, t0: now, color: '#ffffff', w: 1.2 });
+    this.rings.push({ x: x, y: y, t0: now + 60, color: e.color, w: 0.9 });
+    var perp = [-u[1], u[0]];
+    for (var k = 0; k < 26 + p * 8; k++) {
+      var side = k % 2 ? 1 : -1, spread = (Math.random() - 0.5) * 1.4;
+      var vx = (perp[0] * side + u[0] * spread) * (0.25 + Math.random() * 0.55) * fw / 40;
+      var vy = (perp[1] * side + u[1] * spread) * (0.25 + Math.random() * 0.55) * fw / 40 - 0.1;
+      this.particles.push({ kind: 'spark', x: x, y: y, vx: vx, vy: vy, t0: now, life: 280 + Math.random() * 320, color: k % 3 ? '#fff4c2' : e.color, g: 0.0009 });
+    }
+    var chipCols = [th.face[0], th.face[1], th.back[0], th.back[1]];
+    for (k = 0; k < 12; k++) {
+      var ang = Math.random() * 6.283, sp = (0.1 + Math.random() * 0.3) * fw / 40;
+      this.particles.push({ kind: 'chip', x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 0.25 * fw / 40, t0: now, life: 650 + Math.random() * 350, color: chipCols[k % 4], size: fw * (0.05 + Math.random() * 0.07), rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.03, g: 0.0016 });
+    }
+    for (k = 0; k < 7; k++) {
+      var a2 = Math.random() * 6.283;
+      this.particles.push({ kind: 'dust', x: x + Math.cos(a2) * fw * 0.2, y: y + Math.sin(a2) * fw * 0.2, vx: Math.cos(a2) * 0.03, vy: Math.sin(a2) * 0.03 - 0.02, t0: now, life: 600 + Math.random() * 300, color: th.face[1], size: fw * (0.25 + Math.random() * 0.2), g: 0 });
     }
   };
 
-  function star(g, x, y, r, rot) {
-    g.beginPath();
-    for (var k = 0; k < 10; k++) {
-      var a = rot + k * Math.PI / 5, rad = k % 2 ? r * 0.45 : r;
-      g.lineTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad);
+  TileBoard.prototype.drawSlam = function (g, e, now) {
+    var t = now - e.t0, u = e.u, fw = this.fw, fh = this.fh, self = this;
+    var lift = 0, pa, pb, rot = 0, scale = 1, squash = 1, white = 0, alpha = 1;
+    var back = fw * 0.12, ta = [e.m[0] - u[0] * e.ext, e.m[1] - u[1] * e.ext], tb = [e.m[0] + u[0] * e.ext, e.m[1] + u[1] * e.ext];
+    var sa = [e.ca[0] - u[0] * back, e.ca[1] - u[1] * back - fh * 0.08], sb = [e.cb[0] + u[0] * back, e.cb[1] + u[1] * back - fh * 0.08];
+    if (t < RISE) {
+      var q = easeOutCubic(t / RISE);
+      pa = [e.ca[0] + (sa[0] - e.ca[0]) * q, e.ca[1] + (sa[1] - e.ca[1]) * q];
+      pb = [e.cb[0] + (sb[0] - e.cb[0]) * q, e.cb[1] + (sb[1] - e.cb[1]) * q];
+      lift = this.dz * 1.6 * q; scale = 1 + 0.06 * q; rot = 0.1 * q;
+    } else if (t < RISE + RUSH) {
+      var r = easeInCubic((t - RISE) / RUSH);
+      pa = [sa[0] + (ta[0] - sa[0]) * r, sa[1] + (ta[1] - sa[1]) * r];
+      pb = [sb[0] + (tb[0] - sb[0]) * r, sb[1] + (tb[1] - sb[1]) * r];
+      lift = this.dz * 1.6; scale = 1.06; rot = 0.1 * (1 - r);
+      // Motion trail.
+      [0.18, 0.36].forEach(function (lag, n) {
+        var rl = easeInCubic(Math.max(0, (t - RISE) / RUSH - lag));
+        var w = fw * scale, h = fh * scale;
+        [[sa, ta, e.ka], [sb, tb, e.kb]].forEach(function (s) {
+          var px = s[0][0] + (s[1][0] - s[0][0]) * rl, py = s[0][1] + (s[1][1] - s[0][1]) * rl;
+          self.drawTile(g, { x: px - w / 2, y: py - h / 2, w: w, h: h }, s[2], { lift: lift, alpha: 0.22 / (n + 1), noShadow: true });
+        });
+      });
+    } else {
+      if (!e.hit) { e.hit = true; this.impact(e, now); }
+      pa = ta; pb = tb; lift = this.dz * 1.6;
+      var h2 = t - RISE - RUSH;
+      if (h2 < HOLD) { squash = 1 - 0.12 * Math.sin(Math.PI * h2 / HOLD); white = 0.5 * (1 - h2 / HOLD) + 0.2; scale = 1.06; }
+      else {
+        var f = clamp01((h2 - HOLD) / FUSE);
+        scale = 1.06 * (1 - easeInCubic(f)); white = 0.2 + 0.6 * f; alpha = 1 - f * 0.5;
+        pa = [ta[0] + (e.m[0] - ta[0]) * f, ta[1] + (e.m[1] - ta[1]) * f];
+        pb = [tb[0] + (e.m[0] - tb[0]) * f, tb[1] + (e.m[1] - tb[1]) * f];
+        rot = -0.4 * f;
+      }
     }
-    g.closePath(); g.fill();
-  }
+    var w = fw * scale, h = fh * scale;
+    if (w < 1) return;
+    var sx = 1 - (1 - squash) * Math.abs(u[0]), sy = 1 - (1 - squash) * Math.abs(u[1]);
+    [[pa, e.ka, -1], [pb, e.kb, 1]].forEach(function (s) {
+      var ww = w * sx, hh = h * sy;
+      self.drawTile(g, { x: s[0][0] - ww / 2, y: s[0][1] - hh / 2, w: ww, h: hh }, s[1], { lift: lift, rot: rot * s[2], white: white, alpha: alpha, glow: hexA(e.color, 0.85) });
+    });
+  };
 
+  // ---------------------------------------------------------------- frame
   TileBoard.prototype.frame = function (now) {
     var g = this.g;
     if (this.entry && now > this.entry.end) { this.entry = null; this.dirty = true; }
@@ -227,13 +394,14 @@
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, this.c.width, this.c.height);
     if (!this.lay) return;
-    if (animating) { g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); this.drawAll(g, now, null); }
-    else g.drawImage(this.stat, 0, 0);
-    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    var rad = this.fw * 0.13, k, r, pulse = 0.5 + 0.5 * Math.sin(now / 150);
+    var sx = 0, sy = 0;
+    if (this.shake > 0.3) { sx = (Math.random() - 0.5) * this.shake; sy = (Math.random() - 0.5) * this.shake; this.shake *= 0.86; } else this.shake = 0;
+    if (animating) { g.setTransform(this.dpr, 0, 0, this.dpr, sx * this.dpr, sy * this.dpr); this.drawAll(g, now, null); }
+    else g.drawImage(this.stat, sx * this.dpr, sy * this.dpr);
+    g.setTransform(this.dpr, 0, 0, this.dpr, sx * this.dpr, sy * this.dpr);
+    var rad = this.fw * 0.12, k, r, pulse = 0.5 + 0.5 * Math.sin(now / 150);
 
     if (!animating) {
-      // Matching partners of the selected tile (assist on early levels).
       for (k = 0; k < this.partners.length; k++) {
         var pi = this.partners[k];
         if (!this.present[pi] || pi === this.hover) continue;
@@ -241,23 +409,19 @@
         rr(g, r.x - 2, r.y - 2, r.w + 4, r.h + 4, rad + 2);
         g.strokeStyle = hexA(this.accent, 0.35 + pulse * 0.45); g.lineWidth = 2.5; g.stroke();
       }
-      if (this.hover >= 0 && this.present[this.hover]) {
-        this.drawTile(g, this.rect(this.hover), this.kinds[this.hover], { state: 'hover', lift: this.dz * 0.6 });
-      }
+      if (this.hover >= 0 && this.present[this.hover]) this.drawTile(g, this.rect(this.hover), this.kinds[this.hover], { state: 'hover', lift: this.dz * 0.7 });
       if (this.sel >= 0 && this.present[this.sel]) {
-        var bob = reducedMotion ? 0 : Math.sin(now / 220) * this.dz * 0.25;
-        this.drawTile(g, this.rect(this.sel), this.kinds[this.sel], { state: 'selected', lift: this.dz * 1.1 + bob, glow: hexA(this.accent, 0.8) });
+        var bob = reducedMotion ? 0 : Math.sin(now / 220) * this.dz * 0.3;
+        this.drawTile(g, this.rect(this.sel), this.kinds[this.sel], { state: 'selected', lift: this.dz * 1.3 + bob, glow: hexA(this.accent, 0.7) });
       }
     }
-
     if (this.hint.length && now < this.hintUntil) {
       for (k = 0; k < this.hint.length; k++) {
         if (!this.present[this.hint[k]]) continue;
         r = this.rect(this.hint[k]);
         rr(g, r.x - 3, r.y - 3, r.w + 6, r.h + 6, rad + 3);
         g.save(); g.shadowColor = '#fff1a8'; g.shadowBlur = 16;
-        g.strokeStyle = 'rgba(255,241,168,' + (0.5 + pulse * 0.5) + ')'; g.lineWidth = 3.5; g.stroke();
-        g.restore();
+        g.strokeStyle = 'rgba(255,241,168,' + (0.5 + pulse * 0.5) + ')'; g.lineWidth = 3.5; g.stroke(); g.restore();
       }
     }
     for (k = this.flash.length - 1; k >= 0; k--) {
@@ -266,39 +430,60 @@
       r = this.rect(fl.i);
       var jx = reducedMotion ? 0 : Math.sin(q * 32) * (1 - q) * 5;
       rr(g, r.x + jx, r.y, r.w, r.h, rad);
-      g.fillStyle = 'rgba(255,70,70,' + 0.25 * (1 - q) + ')'; g.fill();
-      g.strokeStyle = 'rgba(255,80,70,' + (1 - q) + ')'; g.lineWidth = 3; g.stroke();
+      g.fillStyle = 'rgba(255,60,60,' + 0.25 * (1 - q) + ')'; g.fill();
+      g.strokeStyle = 'rgba(255,70,60,' + (1 - q) + ')'; g.lineWidth = 3; g.stroke();
     }
-    // Matched pairs glide to their midpoint, then burst.
+    // Dust sits behind the slam; sparks and chips fly in front.
+    this.drawParticles(g, now, 'dust');
     for (k = this.fx.length - 1; k >= 0; k--) {
-      var e = this.fx[k], t = clamp01((now - e.t0) / (reducedMotion ? 60 : 260));
-      var mx = (e.ra.x + e.rb.x) / 2, my = (e.ra.y + e.rb.y) / 2 - this.fh * 0.25;
-      if (t >= 1) { this.fx.splice(k, 1); this.burst(mx + this.fw / 2, my + this.fh / 2, e.color, now); continue; }
-      var p = easeIn(t), sc = 1 + 0.15 * Math.sin(t * Math.PI);
-      [[e.ra, e.ka], [e.rb, e.kb]].forEach(function (pair) {
-        var ra = pair[0], w = ra.w * sc, h = ra.h * sc;
-        var x = ra.x + (mx - ra.x) * p - (w - ra.w) / 2, y = ra.y + (my - ra.y) * p - (h - ra.h) / 2;
-        this.drawTile(g, { x: x, y: y, w: w, h: h }, pair[1], { state: 'selected', lift: this.dz, glow: hexA(e.color, 0.9) });
-      }, this);
+      var e = this.fx[k];
+      if (now - e.t0 > RISE + RUSH + HOLD + FUSE) { this.fx.splice(k, 1); continue; }
+      this.drawSlam(g, e, now);
+    }
+    for (k = this.flashes.length - 1; k >= 0; k--) {
+      var fs = this.flashes[k], fq = (now - fs.t0) / 220;
+      if (fq >= 1) { this.flashes.splice(k, 1); continue; }
+      var fg = g.createRadialGradient(fs.x, fs.y, 0, fs.x, fs.y, fs.r * (0.6 + fq));
+      fg.addColorStop(0, 'rgba(255,255,255,' + 0.95 * (1 - fq) + ')'); fg.addColorStop(0.35, 'rgba(255,240,190,' + 0.5 * (1 - fq) + ')'); fg.addColorStop(1, 'rgba(255,240,190,0)');
+      g.fillStyle = fg; g.fillRect(fs.x - fs.r * 2, fs.y - fs.r * 2, fs.r * 4, fs.r * 4);
     }
     for (k = this.rings.length - 1; k >= 0; k--) {
-      var rg = this.rings[k], rq = (now - rg.t0) / 500;
+      var rg = this.rings[k], rq = (now - rg.t0) / 480;
+      if (rq < 0) continue;
       if (rq >= 1) { this.rings.splice(k, 1); continue; }
-      g.strokeStyle = hexA(rg.color, 0.9 * (1 - rq)); g.lineWidth = 4 * (1 - rq) + 1;
-      g.beginPath(); g.arc(rg.x, rg.y, this.fw * (0.3 + rq * 1.4), 0, 6.283); g.stroke();
+      g.strokeStyle = hexA(rg.color, 0.85 * (1 - rq)); g.lineWidth = 5 * (1 - rq) * rg.w + 0.5;
+      g.beginPath(); g.ellipse(rg.x, rg.y, this.fw * (0.3 + easeOutCubic(rq) * 1.8) * rg.w, this.fw * (0.2 + easeOutCubic(rq) * 1.2) * rg.w, 0, 0, 6.283); g.stroke();
     }
-    for (k = this.particles.length - 1; k >= 0; k--) {
-      var pt = this.particles[k], age = now - pt.t0;
-      if (age > pt.life) { this.particles.splice(k, 1); continue; }
-      var a = 1 - age / pt.life, px = pt.x + pt.vx * age, py = pt.y + pt.vy * age + 0.00025 * age * age;
-      g.globalAlpha = a; g.fillStyle = pt.color;
-      if (pt.star) star(g, px, py, pt.size * 1.6, pt.rot + age / 200);
-      else { g.beginPath(); g.arc(px, py, pt.size * (0.5 + a * 0.5), 0, 6.283); g.fill(); }
-      g.globalAlpha = 1;
-    }
+    this.drawParticles(g, now, 'spark');
+    this.drawParticles(g, now, 'chip');
   };
 
-  TileBoard.prototype.busy = function () { return !!(this.entry || this.flip); };
+  TileBoard.prototype.drawParticles = function (g, now, kind) {
+    for (var k = this.particles.length - 1; k >= 0; k--) {
+      var p = this.particles[k];
+      if (p.kind !== kind) continue;
+      var age = now - p.t0;
+      if (age > p.life) { this.particles.splice(k, 1); continue; }
+      var a = 1 - age / p.life, x = p.x + p.vx * age, y = p.y + p.vy * age + p.g * age * age;
+      if (kind === 'spark') {
+        var vy = p.vy + 2 * p.g * age;
+        g.strokeStyle = hexA(p.color, a); g.lineWidth = Math.max(1, this.fw * 0.035 * a); g.lineCap = 'round';
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x - p.vx * 22, y - vy * 22); g.stroke();
+      } else if (kind === 'chip') {
+        g.save(); g.translate(x, y); g.rotate(p.rot + p.vr * age); g.globalAlpha = Math.min(1, a * 1.5);
+        g.fillStyle = p.color; g.beginPath();
+        g.moveTo(-p.size, -p.size * 0.4); g.lineTo(p.size * 0.6, -p.size * 0.7); g.lineTo(p.size, p.size * 0.5); g.lineTo(-p.size * 0.3, p.size * 0.6);
+        g.closePath(); g.fill();
+        g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 0.6; g.stroke();
+        g.restore();
+      } else {
+        var sz = p.size * (1 + (1 - a) * 1.5);
+        var dg = g.createRadialGradient(x, y, 0, x, y, sz);
+        dg.addColorStop(0, hexA(p.color, 0.28 * a)); dg.addColorStop(1, hexA(p.color, 0));
+        g.fillStyle = dg; g.fillRect(x - sz, y - sz, sz * 2, sz * 2);
+      }
+    }
+  };
 
   global.TileBoard = TileBoard;
 })(this);

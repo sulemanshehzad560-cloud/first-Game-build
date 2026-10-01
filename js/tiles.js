@@ -1,23 +1,26 @@
-/* Tile faces and tile sets, drawn with canvas paths (no image assets). */
+/* Traditional Mahjong tile faces and tile-set materials, drawn with canvas paths.
+   drawFace() paints the symbols only; board.js carves them into the tile surface. */
 (function (global) {
   'use strict';
   var GLYPH_FONT = '"Noto Serif SC", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif';
   var NUMERALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
   var WINDS = ['東', '南', '西', '北'];
 
-  // Tile sets unlock with stars. bg = [deep, mid, glow A, glow B] for the table behind the board.
+  // Materials: face = polished front, body = the bone-colored layer seen on the side,
+  // back = the dyed back layer. bg = [deep, mid, glow A, glow B] for the table.
   var THEMES = [
-    { id: 'jade', name: 'Jade', stars: 0, back: ['#2bc293', '#0c5a43'], body: '#dccfae', face: ['#fffbf1', '#eee1c3'], edge: 'rgba(110,90,50,.35)', pal: 'light', accent: '#ffc94a', bg: ['#0b2621', '#145244', '#2bc293', '#ffc94a'] },
-    { id: 'sakura', name: 'Sakura', stars: 12, back: ['#ff86b8', '#b8285f'], body: '#f3d5e1', face: ['#fff8fb', '#fde1ec'], edge: 'rgba(160,60,100,.3)', pal: 'light', accent: '#ff5fa2', bg: ['#2a0c20', '#64184a', '#ff86b8', '#ffd166'] },
-    { id: 'lagoon', name: 'Lagoon', stars: 30, back: ['#47cdff', '#0a62a0'], body: '#d1e7f3', face: ['#f8fdff', '#ddf0fa'], edge: 'rgba(40,100,150,.3)', pal: 'light', accent: '#38d6ff', bg: ['#061a30', '#0c4775', '#47cdff', '#7cffcb'] },
-    { id: 'ember', name: 'Ember', stars: 60, back: ['#ffa24a', '#bf3a0a'], body: '#f3d9bf', face: ['#fffaf1', '#fbe4cb'], edge: 'rgba(160,80,30,.3)', pal: 'light', accent: '#ff8a3d', bg: ['#260f05', '#71290b', '#ffa24a', '#ffe066'] },
-    { id: 'royal', name: 'Royal', stars: 100, back: ['#b388ff', '#5523b8'], body: '#e1d4f6', face: ['#fdfaff', '#eae0fb'], edge: 'rgba(90,50,160,.3)', pal: 'light', accent: '#c59bff', bg: ['#140a30', '#381c7a', '#b388ff', '#ff86b8'] },
-    { id: 'obsidian', name: 'Obsidian', stars: 160, back: ['#5a628c', '#121527'], body: '#3a4062', face: ['#30365a', '#1b1f38'], edge: 'rgba(255,255,255,.14)', pal: 'dark', accent: '#3ef0c8', bg: ['#06070e', '#191d3a', '#6c7cff', '#3ef0c8'] }
+    { id: 'jade', name: 'Jade', stars: 0, face: ['#fffaf0', '#efe4cc'], body: ['#f3e8cf', '#d8c8a6'], back: ['#1f9a6f', '#0a4a35'], pal: 'light', accent: '#ffc94a', bg: ['#0b2621', '#145244', '#2bc293', '#ffc94a'] },
+    { id: 'sakura', name: 'Sakura', stars: 12, face: ['#fffaf8', '#f6e6e3'], body: ['#f7e8e4', '#dfc7c2'], back: ['#e8608f', '#8e1f4b'], pal: 'light', accent: '#ff5fa2', bg: ['#2a0c20', '#64184a', '#ff86b8', '#ffd166'] },
+    { id: 'lagoon', name: 'Lagoon', stars: 30, face: ['#fbfdff', '#e3edf2'], body: ['#eef4f7', '#c9d7de'], back: ['#1aa3c8', '#0a4a6e'], pal: 'light', accent: '#38d6ff', bg: ['#061a30', '#0c4775', '#47cdff', '#7cffcb'] },
+    { id: 'ember', name: 'Ember', stars: 60, face: ['#fffaf0', '#f3e2c6'], body: ['#f6e6c8', '#dcc39b'], back: ['#e5741f', '#8a2f07'], pal: 'light', accent: '#ff8a3d', bg: ['#260f05', '#71290b', '#ffa24a', '#ffe066'] },
+    { id: 'royal', name: 'Royal', stars: 100, face: ['#fffcf6', '#eee6da'], body: ['#f2ebe0', '#d6cbbb'], back: ['#7b48d6', '#341670'], pal: 'light', accent: '#c59bff', bg: ['#140a30', '#381c7a', '#b388ff', '#ff86b8'] },
+    { id: 'obsidian', name: 'Obsidian', stars: 160, face: ['#3a3f52', '#1c1f2b'], body: ['#2d3142', '#171923'], back: ['#c9a24a', '#6e5218'], pal: 'dark', accent: '#e8c46a', bg: ['#06070e', '#191d3a', '#6c7cff', '#e8c46a'] }
   ];
 
+  // Traditional enamel paint colors; the dark set uses metal inlays.
   var PALETTES = {
-    light: { blue: '#1d63da', green: '#0c9c5a', red: '#e2322a', ink: '#1f2552', gold: '#e39a12', purple: '#7a3de6', teal: '#0aa3a8', paper: '#fffaf0' },
-    dark: { blue: '#5daaff', green: '#3ee08f', red: '#ff5f6d', ink: '#eef0ff', gold: '#ffcb4d', purple: '#b88dff', teal: '#3ef0e0', paper: '#30365a' }
+    light: { blue: '#1c3f94', green: '#0d6b45', red: '#b81d2c', ink: '#15171f', gold: '#a87a22', teal: '#11706f' },
+    dark: { blue: '#9cbcff', green: '#7fe0ae', red: '#ff8a8a', ink: '#efe2c0', gold: '#e8c46a', teal: '#7fe3dc' }
   };
 
   function hex(h) { var v = parseInt(h.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; }
@@ -25,79 +28,89 @@
     var x = hex(a), y = hex(b);
     return 'rgb(' + Math.round(x[0] + (y[0] - x[0]) * t) + ',' + Math.round(x[1] + (y[1] - x[1]) * t) + ',' + Math.round(x[2] + (y[2] - x[2]) * t) + ')';
   }
+  function circle(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill(); }
+  function punch(g, fn) { g.save(); g.globalCompositeOperation = 'destination-out'; fn(); g.restore(); }
 
-  function gem(g, x, y, r, color, pal) {
-    var outer = g.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
-    outer.addColorStop(0, mix(color, '#ffffff', 0.55)); outer.addColorStop(0.6, color); outer.addColorStop(1, mix(color, '#000000', 0.3));
-    g.fillStyle = outer; g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
-    g.fillStyle = pal.paper; g.beginPath(); g.arc(x, y, r * 0.62, 0, 6.283); g.fill();
-    var inner = g.createRadialGradient(x - r * 0.15, y - r * 0.15, 0, x, y, r * 0.42);
-    inner.addColorStop(0, mix(color, '#ffffff', 0.4)); inner.addColorStop(1, color);
-    g.fillStyle = inner; g.beginPath(); g.arc(x, y, r * 0.42, 0, 6.283); g.fill();
-    g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(x - r * 0.38, y - r * 0.4, r * 0.16, 0, 6.283); g.fill();
+  // A traditional "coin": outer ring, a ring of notches, a solid core with a hole.
+  function coin(g, x, y, r, color, inner) {
+    g.fillStyle = color; circle(g, x, y, r);
+    punch(g, function () { circle(g, x, y, r * 0.78); });
+    var n = r > 12 ? 12 : 8;
+    g.fillStyle = color;
+    for (var k = 0; k < n; k++) {
+      var a = k * 6.2832 / n;
+      circle(g, x + Math.cos(a) * r * 0.6, y + Math.sin(a) * r * 0.6, r * (n === 12 ? 0.08 : 0.1));
+    }
+    g.fillStyle = inner || color; circle(g, x, y, r * 0.38);
+    punch(g, function () { circle(g, x, y, r * 0.13); });
   }
 
-  function stick(g, cx, cy, w, h, color) {
-    var x = cx - w / 2, y = cy - h / 2, r = w / 2;
-    var grad = g.createLinearGradient(x, 0, x + w, 0);
-    grad.addColorStop(0, mix(color, '#000000', 0.2)); grad.addColorStop(0.4, mix(color, '#ffffff', 0.35)); grad.addColorStop(1, color);
-    g.fillStyle = grad;
-    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
-    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill();
-    g.fillStyle = mix(color, '#000000', 0.35);
-    g.fillRect(x - w * 0.08, cy - h * 0.035, w * 1.16, h * 0.07);
-    g.fillRect(x - w * 0.04, y + h * 0.12, w * 1.08, h * 0.04);
-    g.fillRect(x - w * 0.04, y + h * 0.84, w * 1.08, h * 0.04);
+  // A bamboo stalk: two tapered segments joined at a raised node.
+  function stalk(g, cx, cy, w, h, color) {
+    var top = cy - h / 2, bot = cy + h / 2, waist = w * 0.62;
+    function seg(y0, y1) {
+      g.beginPath();
+      g.moveTo(cx - waist / 2, y0);
+      g.quadraticCurveTo(cx - w / 2, (y0 + y1) / 2, cx - waist / 2, y1);
+      g.lineTo(cx + waist / 2, y1);
+      g.quadraticCurveTo(cx + w / 2, (y0 + y1) / 2, cx + waist / 2, y0);
+      g.closePath(); g.fill();
+    }
+    g.fillStyle = color;
+    seg(top, cy); seg(cy, bot);
+    g.fillRect(cx - w * 0.5, cy - h * 0.035, w, h * 0.07);
+    g.fillRect(cx - w * 0.45, top - h * 0.01, w * 0.9, h * 0.05);
+    g.fillRect(cx - w * 0.45, bot - h * 0.04, w * 0.9, h * 0.05);
+    punch(g, function () { g.fillRect(cx - w * 0.06, top + h * 0.1, w * 0.12, h * 0.3); g.fillRect(cx - w * 0.06, cy + h * 0.1, w * 0.12, h * 0.3); });
   }
 
-  function peacock(g, w, h, pal) {
+  function bird(g, w, h, pal) {
     var s = Math.min(w, h);
-    g.save(); g.translate(w / 2, h * 0.55);
-    var fan = [pal.teal, pal.blue, pal.purple, pal.green, pal.gold];
-    for (var k = 0; k < 7; k++) {
-      var a = -2.6 + k * 0.33;
-      g.save(); g.rotate(a + 1.57);
-      g.fillStyle = fan[k % fan.length];
-      g.beginPath(); g.ellipse(0, -s * 0.3, s * 0.07, s * 0.2, 0, 0, 6.283); g.fill();
-      g.fillStyle = pal.gold; g.beginPath(); g.arc(0, -s * 0.42, s * 0.04, 0, 6.283); g.fill();
+    g.save(); g.translate(w / 2, h * 0.56);
+    var tail = [pal.blue, pal.green, pal.teal, pal.green, pal.blue];
+    for (var k = 0; k < 5; k++) {
+      g.save(); g.rotate(0.5 + k * 0.28);
+      g.fillStyle = tail[k];
+      g.beginPath(); g.ellipse(0, s * 0.27, s * 0.06, s * 0.2, 0, 0, 6.2832); g.fill();
+      g.fillStyle = pal.gold; circle(g, 0, s * 0.4, s * 0.035);
       g.restore();
     }
-    var body = g.createRadialGradient(-s * 0.05, -s * 0.05, 0, 0, 0, s * 0.2);
-    body.addColorStop(0, mix(pal.green, '#ffffff', 0.4)); body.addColorStop(1, pal.green);
-    g.fillStyle = body; g.beginPath(); g.ellipse(0, s * 0.02, s * 0.14, s * 0.19, 0, 0, 6.283); g.fill();
-    g.fillStyle = pal.red; g.beginPath(); g.arc(-s * 0.02, -s * 0.2, s * 0.08, 0, 6.283); g.fill();
-    g.fillStyle = pal.gold; g.beginPath(); g.moveTo(-s * 0.09, -s * 0.2); g.lineTo(-s * 0.17, -s * 0.17); g.lineTo(-s * 0.09, -s * 0.15); g.fill();
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(-s * 0.04, -s * 0.22, s * 0.02, 0, 6.283); g.fill();
+    g.fillStyle = pal.green;
+    g.beginPath(); g.ellipse(-s * 0.02, 0, s * 0.15, s * 0.2, -0.35, 0, 6.2832); g.fill();
+    g.fillStyle = pal.blue;
+    g.beginPath(); g.ellipse(s * 0.04, s * 0.02, s * 0.07, s * 0.14, -0.5, 0, 6.2832); g.fill();
+    g.fillStyle = pal.red; circle(g, -s * 0.1, -s * 0.2, s * 0.085);
+    g.beginPath(); g.moveTo(-s * 0.16, -s * 0.27); g.lineTo(-s * 0.1, -s * 0.36); g.lineTo(-s * 0.05, -s * 0.27); g.fill();
+    g.fillStyle = pal.gold;
+    g.beginPath(); g.moveTo(-s * 0.18, -s * 0.21); g.lineTo(-s * 0.28, -s * 0.18); g.lineTo(-s * 0.18, -s * 0.15); g.fill();
+    punch(g, function () { circle(g, -s * 0.12, -s * 0.22, s * 0.02); });
     g.restore();
   }
 
-  function glyph(g, ch, x, y, size, color, glow) {
+  function glyph(g, ch, x, y, size, color) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = '700 ' + size + 'px ' + GLYPH_FONT;
-    if (glow) { g.save(); g.shadowColor = color; g.shadowBlur = size * 0.25; g.fillStyle = color; g.fillText(ch, x, y); g.restore(); }
-    var grad = g.createLinearGradient(0, y - size / 2, 0, y + size / 2);
-    grad.addColorStop(0, mix(color, '#ffffff', 0.25)); grad.addColorStop(1, mix(color, '#000000', 0.15));
-    g.fillStyle = grad; g.fillText(ch, x, y);
+    g.fillStyle = color; g.fillText(ch, x, y);
   }
-
   function corner(g, text, color, w, h) {
-    var s = Math.min(w, h) * 0.2;
-    g.font = '800 ' + s + 'px "Figtree", system-ui, sans-serif';
-    g.textAlign = 'left'; g.textBaseline = 'top';
-    g.fillStyle = color; g.fillText(text, w * 0.02, h * 0.0);
+    g.font = '800 ' + Math.min(w, h) * 0.17 + 'px "Figtree", system-ui, sans-serif';
+    g.textAlign = 'left'; g.textBaseline = 'top'; g.fillStyle = color;
+    g.fillText(text, 0, 0);
   }
 
   var DOTS = [
     [[.5, .5]],
     [[.5, .27], [.5, .73]],
     [[.24, .2], [.5, .5], [.76, .8]],
-    [[.3, .28], [.7, .28], [.3, .72], [.7, .72]],
-    [[.27, .23], [.73, .23], [.5, .5], [.27, .77], [.73, .77]],
+    [[.29, .28], [.71, .28], [.29, .72], [.71, .72]],
+    [[.27, .22], [.73, .22], [.5, .5], [.27, .78], [.73, .78]],
     [[.3, .18], [.7, .18], [.3, .5], [.7, .5], [.3, .82], [.7, .82]],
-    [[.22, .13], [.5, .24], [.78, .35], [.3, .6], [.7, .6], [.3, .85], [.7, .85]],
-    [[.3, .13], [.7, .13], [.3, .38], [.7, .38], [.3, .63], [.7, .63], [.3, .88], [.7, .88]],
-    [[.2, .18], [.5, .18], [.8, .18], [.2, .5], [.5, .5], [.8, .5], [.2, .82], [.5, .82], [.8, .82]]
+    [[.22, .12], [.5, .23], [.78, .34], [.3, .6], [.7, .6], [.3, .86], [.7, .86]],
+    [[.3, .12], [.7, .12], [.3, .37], [.7, .37], [.3, .63], [.7, .63], [.3, .88], [.7, .88]],
+    [[.2, .17], [.5, .17], [.8, .17], [.2, .5], [.5, .5], [.8, .5], [.2, .83], [.5, .83], [.8, .83]]
   ];
+  // Traditional coloring by suit position: 0 blue, 1 green, 2 red.
+  var DOT_COLORS = [null, [1, 0], [0, 2, 1], [0, 1, 1, 0], [0, 1, 2, 1, 0], [1, 1, 2, 2, 2, 2], [1, 1, 1, 2, 2, 2, 2], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 2, 2, 2, 1, 1, 1]];
   var STICKS = [
     null,
     [[.5, .27, 0], [.5, .73, 0]],
@@ -110,42 +123,42 @@
     [[.2, .17, 0], [.5, .17, 1], [.8, .17, 0], [.2, .5, 2], [.5, .5, 1], [.8, .5, 2], [.2, .83, 0], [.5, .83, 1], [.8, .83, 0]]
   ];
 
-  /** Draw tile kind into a w×h face box at the origin using a palette. */
+  /** Paint the symbols for a kind into a w×h box at the origin (transparent background). */
   function drawFace(g, kind, w, h, palName) {
-    var pal = PALETTES[palName] || PALETTES.light, s = Math.min(w, h), i;
+    var pal = PALETTES[palName] || PALETTES.light, s = Math.min(w, h), cols = [pal.blue, pal.green, pal.red], i;
     if (kind < 9) {
-      var n = kind + 1, pts = DOTS[kind], r = n === 1 ? s * 0.36 : n <= 4 ? s * 0.18 : n <= 6 ? s * 0.14 : s * 0.115;
-      var cols = [pal.red, pal.blue, pal.green, pal.purple, pal.teal];
-      for (i = 0; i < pts.length; i++) gem(g, pts[i][0] * w, pts[i][1] * h, r, n === 1 ? pal.blue : cols[(i + n) % cols.length], pal);
+      var n = kind + 1, pts = DOTS[kind];
       if (n === 1) {
-        g.strokeStyle = pal.gold; g.lineWidth = s * 0.035;
-        g.beginPath(); g.arc(w / 2, h / 2, r * 1.18, 0, 6.283); g.stroke();
+        coin(g, w / 2, h / 2, s * 0.42, pal.green, pal.red);
+        g.strokeStyle = pal.blue; g.lineWidth = s * 0.03;
+        g.beginPath(); g.arc(w / 2, h / 2, s * 0.47, 0, 6.2832); g.stroke();
+        return;
       }
+      var r = n <= 4 ? s * 0.19 : n <= 6 ? s * 0.15 : s * 0.12;
+      for (i = 0; i < pts.length; i++) coin(g, pts[i][0] * w, pts[i][1] * h, r, cols[DOT_COLORS[kind][i]]);
     } else if (kind < 18) {
       var b = kind - 9;
-      if (b === 0) { peacock(g, w, h, pal); return; }
-      var sw = s * (b >= 7 ? 0.14 : 0.16), sh = h * (b >= 6 ? 0.27 : 0.37);
+      if (b === 0) { bird(g, w, h, pal); return; }
+      var sw = s * (b >= 7 ? 0.15 : 0.17), sh = h * (b >= 6 ? 0.28 : 0.38);
       var stickCols = [pal.green, pal.red, pal.blue];
-      STICKS[b].forEach(function (p) { stick(g, p[0] * w, p[1] * h, sw, sh, stickCols[p[2]]); });
+      STICKS[b].forEach(function (p) { stalk(g, p[0] * w, p[1] * h, sw, sh, stickCols[p[2]]); });
     } else if (kind < 27) {
-      glyph(g, NUMERALS[kind - 18], w / 2, h * 0.3, s * 0.48, pal.blue);
-      glyph(g, '萬', w / 2, h * 0.72, s * 0.52, pal.red);
-      corner(g, String(kind - 17), pal.gold, w, h);
+      glyph(g, NUMERALS[kind - 18], w / 2, h * 0.29, s * 0.5, pal.ink);
+      glyph(g, '萬', w / 2, h * 0.72, s * 0.56, pal.red);
+      corner(g, String(kind - 17), pal.red, w, h);
     } else if (kind < 31) {
-      var wc = [pal.blue, pal.red, pal.green, pal.purple][kind - 27];
-      glyph(g, WINDS[kind - 27], w / 2, h * 0.53, s * 0.74, wc);
-      corner(g, 'ESWN'[kind - 27], wc, w, h);
+      glyph(g, WINDS[kind - 27], w / 2, h * 0.54, s * 0.78, pal.ink);
+      corner(g, 'ESWN'[kind - 27], pal.red, w, h);
     } else if (kind === 31) {
-      glyph(g, '中', w / 2, h / 2, s * 0.82, pal.red, true);
+      glyph(g, '中', w / 2, h * 0.52, s * 0.86, pal.red);
     } else if (kind === 32) {
-      glyph(g, '發', w / 2, h / 2, s * 0.8, pal.green, true);
+      glyph(g, '發', w / 2, h * 0.52, s * 0.82, pal.green);
     } else {
-      var fr = g.createLinearGradient(0, 0, w, h);
-      fr.addColorStop(0, pal.blue); fr.addColorStop(1, pal.purple);
-      g.strokeStyle = fr; g.lineWidth = s * 0.08;
-      g.strokeRect(w * 0.17, h * 0.15, w * 0.66, h * 0.7);
-      g.strokeStyle = pal.gold; g.lineWidth = s * 0.03;
-      g.strokeRect(w * 0.28, h * 0.25, w * 0.44, h * 0.5);
+      g.fillStyle = pal.blue;
+      g.fillRect(w * 0.16, h * 0.14, w * 0.68, h * 0.72);
+      punch(g, function () { g.fillRect(w * 0.23, h * 0.2, w * 0.54, h * 0.6); });
+      g.fillRect(w * 0.29, h * 0.26, w * 0.42, h * 0.48);
+      punch(g, function () { g.fillRect(w * 0.32, h * 0.29, w * 0.36, h * 0.42); });
     }
   }
 

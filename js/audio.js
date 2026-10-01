@@ -53,6 +53,18 @@
       tone(note(s), 0.35, 'sine', 0.22, 0.04);
       if (combo > 1) tone(note(s + 2), 0.3, 'triangle', 0.08, 0.1);
     },
+    /** Two heavy tiles colliding: a sharp crack, a woody knock, a low thump, then the combo chime. */
+    slam: function (power, combo) {
+      var c = ensure(); if (!c) return;
+      clack(0, 3200, 1); clack(0, 1400, 1); clack(0.012, 900, 0.9);
+      var t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(150 + power * 10, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.22);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55 + Math.min(power, 4) * 0.08, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.3);
+      var s = Math.min(Math.max(combo, 1) - 1, 12);
+      tone(note(s), 0.4, 'sine', 0.2, 0.05);
+      if (combo > 1) tone(note(s + 2), 0.35, 'triangle', 0.08, 0.11);
+    },
     shuffle: function () { for (var k = 0; k < 7; k++) clack(k * 0.045, 1800 + Math.random() * 1600, 0.6); },
     tick: function () { tone(1200, 0.05, 'square', 0.04); },
     win: function () { [0, 2, 4, 5, 7, 9].forEach(function (s, k) { tone(note(s), 0.45, 'sine', 0.22, k * 0.08); }); },

@@ -326,7 +326,6 @@
     var tier = { 3: 'Nice!', 5: 'Great!', 7: 'Amazing!', 9: 'Incredible!', 12: 'Legendary!' }[G.combo];
     if (tier) banner(tier);
     setHeat(G.combo);
-    A.match(G.combo); buzz(G.combo >= 5 ? [12, 30, 12] : 12);
     $('btn-shuffle').classList.remove('attention');
     if (G.duel === 'race') Net.send({ t: 'prog', left: G.left, score: G.score });
     updateTimedHud();
@@ -488,7 +487,6 @@
     G.scores[p] += pts; G.moveNo++;
     var mp = midpoint(a, b);
     floatText('+' + pts, mp[0], mp[1], pts > 1, COLORS[p]);
-    A.match(pts);
     if (G.left === 0) { turnsOver(); return; }
     if (!M.freePairs(G.lay, G.present, G.kinds).length) {
       var next = M.reshuffle(G.lay, G.present, G.kinds, M.mulberry32(M.hash(G.seed, 'reshuffle', G.reshuffles++)));
@@ -528,10 +526,15 @@
 
   // ------------------------------------------------------------- input
   function applyMatch(a, b, remote) {
-    if (!remote) buzz(12);
     G.present[a] = 0; G.present[b] = 0; G.left -= 2;
     G.sel = -1; board.sel = -1;
-    board.matched(a, b, isTurns() ? COLORS[G.turn] : '#e8b64c');
+    var turns = isTurns(), kind = G.kinds[a];
+    var nextCombo = !turns && performance.now() - G.lastMatch < COMBO_MS ? G.combo + 1 : 1;
+    var power = turns ? M.points(kind) : Math.min(4, 1 + (nextCombo - 1) * 0.3);
+    board.matched(a, b, turns ? COLORS[G.turn] : currentTheme().accent, power, function () {
+      A.slam(power, turns ? M.points(kind) : G.combo);
+      buzz(power > 2 ? [25, 30, 25] : 22);
+    });
     if (isTurns()) turnsMatch(a, b, remote); else timedMatch(a, b);
   }
 
