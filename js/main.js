@@ -268,7 +268,7 @@
       rival: { left: gen.layout.n, done: false, out: false, score: 0 }
     });
     G.timeLeft = G.limit;
-    if (cfg.mode === 'journey') { var ch = chapterOf(cfg.level); setTitle(cfg.title, 'Chapter ' + ch.n + ' · ' + ch.name, ch.color); }
+    if (cfg.mode === 'journey') { var ch = chapterOf(cfg.level); setTitle(cfg.title, ch.name, ch.color); }
     else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : 'Race', null);
     var pausable = cfg.mode !== 'online';
     $('btn-quit').textContent = pausable ? '❚❚' : '←'; $('btn-quit').setAttribute('aria-label', pausable ? 'Pause' : 'Leave race');

@@ -137,7 +137,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 /* ---------- bars ---------- */
 .bar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
 .bar-title { margin: 0; font: 800 19px/1.15 var(--font-display); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-title small { display: block; font: 700 11px/1.3 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--chapter, var(--accent)); }
+.bar-title small { display: block; overflow: hidden; text-overflow: ellipsis; font: 700 11px/1.3 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--chapter, var(--accent)); }
 .bar-side { min-width: 42px; text-align: right; color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; }
 .bar-actions { display: flex; gap: 6px; }
 .icon-btn {
@@ -391,3 +391,5 @@ input { -webkit-user-select: text; user-select: text; }
 .version { margin: 6px 0 0; text-align: center; color: var(--muted); font-size: 12px; }
 .pause-info { width: 100%; }
 .modal:has(.pause-info) { backdrop-filter: blur(14px); background: rgba(4, 6, 14, .72); }
+
+#btn-quit { font-size: 14px; letter-spacing: -1px; }
