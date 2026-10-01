@@ -143,7 +143,7 @@ First closed test of Jade Rush: endless Mahjong levels, combos, six wooden tile 
 google.com, pub-4940350948200557, DIRECT, f08c47fec0942fa0
 ```
 
-* The consent form for the EEA/UK comes from AdMob → Privacy & messaging → GDPR. Create and publish a GDPR message there; the app already requests consent on launch and offers "Ad privacy choices" in Settings.
+* The consent form for the EEA/UK comes from AdMob → Privacy & messaging → GDPR. **Create and publish a GDPR message there.** Until you do, Google's consent SDK reports "Publisher misconfiguration: Failed to read publisher's account configuration" (seen in the emulator test of build 106); the app carries on safely and still loads ads, but EEA/UK users won't see a consent form. The app already requests consent on launch and offers "Ad privacy choices" in Settings.
 
 ## 6. Future releases
 

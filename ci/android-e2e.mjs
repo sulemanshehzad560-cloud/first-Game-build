@@ -142,7 +142,9 @@ writeFileSync(`${OUT}/logcat-debug.txt`, logcat);
 const fatal = logcat.split('\n').filter(l => /FATAL EXCEPTION|ANR in com\.sulemanshehzad|Renderer process .* (crashed|killed)/.test(l));
 log(fatal.length === 0, 'No crashes or ANRs in logcat' + (fatal.length ? ': ' + fatal.slice(0, 3).join(' / ') : ''));
 writeFileSync(`${OUT}/admob-log.txt`, logcat.split('\n').filter(l => /Ads\s*:|AdMob|UserMessagingPlatform/i.test(l)).slice(0, 60).join('\n'));
-const jsErrors = errors.filter(e => !/net::ERR|Failed to load resource|peerjs/i.test(e));
+const consentSetup = errors.filter(e => /Publisher misconfiguration/i.test(e));
+if (consentSetup.length) log(true, 'NOTE AdMob consent message not set up in the AdMob account yet (Privacy & messaging → GDPR)');
+const jsErrors = errors.filter(e => !/net::ERR|Failed to load resource|peerjs|Publisher misconfiguration/i.test(e));
 log(jsErrors.length === 0, 'No JavaScript errors' + (jsErrors.length ? ': ' + jsErrors.slice(0, 5).join(' / ') : ''));
 
 writeFileSync(`${OUT}/report.txt`, report.join('\n') + '\n');
