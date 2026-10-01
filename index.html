@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nova Chain</title>
+<meta name="description" content="Nova Chain is a chain-reaction puzzle with endless levels and two-player online duels.">
+<meta name="theme-color" content="#0c0a1d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<main id="app">
+  <!-- HOME -->
+  <section id="home" class="screen">
+    <header class="brand">
+      <canvas id="demo" aria-label="A live chain reaction demo"></canvas>
+      <h1 class="logo"><span>Nova</span><span>Chain</span></h1>
+      <p class="tagline">One tap. A thousand bursts.</p>
+    </header>
+
+    <nav class="menu">
+      <button id="btn-continue" class="cta">
+        <span class="cta-eyebrow">Journey</span>
+        <span class="cta-title" id="continue-label">Level 1</span>
+        <span class="cta-meta" id="continue-meta">Endless levels · 0 ★</span>
+      </button>
+      <div class="pair">
+        <button id="btn-levels" class="tile">
+          <span class="tile-title">Level map</span>
+          <span class="tile-meta" id="levels-meta">Replay for 3 ★</span>
+        </button>
+        <button id="btn-daily" class="tile">
+          <span class="tile-title">Daily spark</span>
+          <span class="tile-meta" id="daily-meta">New puzzle every day</span>
+        </button>
+      </div>
+
+      <h2 class="section-label">Duel <span>two players · cyan vs rose</span></h2>
+      <div class="trio">
+        <button id="btn-online" class="tile duel"><span class="tile-title">Online</span><span class="tile-meta">Room code</span></button>
+        <button id="btn-local" class="tile duel"><span class="tile-title">Pass &amp; play</span><span class="tile-meta">One device</span></button>
+        <button id="btn-ai" class="tile duel"><span class="tile-title">Vs Nova AI</span><span class="tile-meta" id="ai-meta">3 levels</span></button>
+      </div>
+    </nav>
+
+    <footer class="home-foot">
+      <button id="btn-howto" class="link">How to play</button>
+      <button id="btn-sound" class="link" aria-pressed="true">Sound on</button>
+    </footer>
+  </section>
+
+  <!-- LEVEL MAP -->
+  <section id="levels" class="screen" hidden>
+    <header class="bar">
+      <button class="icon-btn back" data-back aria-label="Back">←</button>
+      <h2 class="bar-title">Level map</h2>
+      <span class="bar-side" id="levels-stars">0 ★</span>
+    </header>
+    <div class="level-grid" id="level-grid"></div>
+  </section>
+
+  <!-- ONLINE LOBBY -->
+  <section id="lobby" class="screen" hidden>
+    <header class="bar">
+      <button class="icon-btn back" data-back aria-label="Back">←</button>
+      <h2 class="bar-title">Online duel</h2>
+      <span class="bar-side"></span>
+    </header>
+    <div class="lobby">
+      <div class="panel">
+        <h3>Host a room</h3>
+        <p class="muted">Share the code with a friend. You play cyan.</p>
+        <div class="size-pick" role="radiogroup" aria-label="Board size">
+          <button class="chip" data-size="5x7" role="radio" aria-checked="false">Compact 5×7</button>
+          <button class="chip" data-size="6x9" role="radio" aria-checked="true">Classic 6×9</button>
+        </div>
+        <button id="btn-host" class="primary">Create room</button>
+        <div id="host-box" class="code-box" hidden>
+          <span class="code" id="room-code">-----</span>
+          <div class="code-actions">
+            <button id="btn-copy-code" class="ghost">Copy code</button>
+            <button id="btn-copy-link" class="ghost">Copy invite link</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Join a room</h3>
+        <p class="muted">Enter your friend's 5-letter code. You play rose.</p>
+        <form id="join-form" class="join">
+          <label class="sr-only" for="join-code">Room code</label>
+          <input id="join-code" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE">
+          <button class="primary" type="submit">Join</button>
+        </form>
+      </div>
+      <p id="lobby-status" class="status" role="status"></p>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="game" class="screen" hidden>
+    <header class="bar">
+      <button class="icon-btn back" id="btn-quit" aria-label="Back to menu">←</button>
+      <h2 class="bar-title" id="game-title">Level 1</h2>
+      <div class="bar-actions">
+        <button class="icon-btn" id="btn-undo" aria-label="Undo">↶</button>
+        <button class="icon-btn" id="btn-hint" aria-label="Hint"><span>?</span><b id="hint-count">3</b></button>
+        <button class="icon-btn" id="btn-restart" aria-label="Restart">↻</button>
+      </div>
+    </header>
+
+    <div class="hud" id="hud-puzzle">
+      <div class="meter">
+        <span class="meter-label">Taps</span>
+        <div class="taps" id="taps"></div>
+      </div>
+      <div class="meter grow">
+        <span class="meter-label">Lit <b id="lit-text">0/0</b></span>
+        <div class="litbar"><i id="lit-fill"></i></div>
+      </div>
+    </div>
+
+    <div class="hud versus" id="hud-versus" hidden>
+      <div class="player p0" id="chip-0"><span class="dot"></span><span class="pname" id="pname-0">Cyan</span><b id="pcount-0">0</b></div>
+      <span class="turn-note" id="turn-note">Cyan to move</span>
+      <div class="player p1" id="chip-1"><b id="pcount-1">0</b><span class="pname" id="pname-1">Rose</span><span class="dot"></span></div>
+    </div>
+
+    <div class="board-wrap" id="board-wrap">
+      <canvas id="board"></canvas>
+      <div id="emote-layer" aria-live="polite"></div>
+    </div>
+
+    <div class="foot">
+      <p id="goal" class="goal">Light up every cell.</p>
+      <div id="emotes" class="emotes" hidden>
+        <button data-emote="🔥">🔥</button><button data-emote="😱">😱</button><button data-emote="😎">😎</button><button data-emote="👏">👏</button><button data-emote="GG">GG</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="modal" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div id="modal-stars" class="stars-big" hidden></div>
+    <h2 id="modal-title"></h2>
+    <div id="modal-body" class="modal-body"></div>
+    <div id="modal-actions" class="modal-actions"></div>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
+<script src="js/engine.js" defer></script>
+<script src="js/audio.js" defer></script>
+<script src="js/net.js" defer></script>
+<script src="js/render.js" defer></script>
+<script src="js/main.js" defer></script>
+</body>
+</html>
