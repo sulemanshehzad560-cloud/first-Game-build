@@ -6,4 +6,6 @@ mkdirSync(out);
 for (const p of ['index.html', 'privacy.html', 'data-deletion.html', 'webview-update.html', 'favicon.png', 'css', 'js', 'fonts', 'vendor']) {
   if (existsSync(p)) cpSync(p, `${out}/${p}`, { recursive: true });
 }
+// Keep the bundled Capacitor runtime in step with the installed @capacitor/core.
+cpSync('node_modules/@capacitor/core/dist/capacitor.js', `${out}/vendor/capacitor.js`);
 console.log('www/ ready');
