@@ -2,18 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Jade Rush</title>
 <meta name="description" content="Jade Rush is a Mahjong tile-matching game with endless levels, a clock to beat, and two-player online duels.">
 <meta name="theme-color" content="#0d2622">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&text=%E4%B8%80%E4%BA%8C%E4%B8%89%E5%9B%9B%E4%BA%94%E5%85%AD%E4%B8%83%E5%85%AB%E4%B9%9D%E8%90%AC%E6%9D%B1%E5%8D%97%E8%A5%BF%E5%8C%97%E4%B8%AD%E7%99%BC&display=block">
+<link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <canvas id="bg" aria-hidden="true"></canvas>
+<div id="loader" aria-hidden="true"><div class="loader-tile">中</div><p>Jade <span>Rush</span></p></div>
 <main id="app">
   <!-- HOME -->
   <section id="home" class="screen">
@@ -59,7 +57,7 @@
 
     <footer class="home-foot">
       <button id="btn-howto" class="link">How to play</button>
-      <button id="btn-sound" class="link" aria-pressed="true">Sound on</button>
+      <button id="btn-settings" class="link">Settings</button>
     </footer>
   </section>
 
@@ -179,12 +177,14 @@
 <div id="toast" class="toast" hidden></div>
 <canvas id="confetti" aria-hidden="true"></canvas>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
+<script src="vendor/peerjs.min.js" defer></script>
 <script src="js/mahjong.js" defer></script>
 <script src="js/tiles.js" defer></script>
 <script src="js/board.js" defer></script>
 <script src="js/audio.js" defer></script>
 <script src="js/net.js" defer></script>
+<script src="js/native.js" defer></script>
+<script src="js/ads.js" defer></script>
 <script src="js/main.js" defer></script>
 </body>
 </html>

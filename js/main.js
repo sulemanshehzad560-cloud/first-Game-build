@@ -5,10 +5,13 @@
   var $ = function (id) { return document.getElementById(id); };
   var TURN_MS = 15000, COMBO_MS = 5000, HINT_COST_MS = 10000;
   var COLORS = ['#4fd1a5', '#ff7a59'];
+  var PRIVACY_URL = 'https://sulemanshehzad560-cloud.github.io/first-Game-build/privacy.html';
+  var Shell = window.NativeShell || { isNative: false, onBack: function () {}, onPause: function () {}, onResume: function () {}, versionName: function () { return Promise.resolve('web'); }, styleBars: function () {} };
+  var Ads = window.GameAds || { boardFinished: function () {}, between: function (l, next) { next(); }, hasPrivacyOptions: function () { return false; } };
 
   // ------------------------------------------------------------- storage
   var SAVE_KEY = 'jaderush.v1';
-  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade' };
+  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
   function totalStars() { var s = 0; for (var k in store.stars) s += store.stars[k]; return s; }
@@ -40,7 +43,7 @@
     var meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t.bg[0];
     board.setTheme(t); demo.setTheme(t); sky.setTheme(t);
   }
-  function buzz(pattern) { if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) { /* not allowed */ } } }
+  function buzz(pattern) { if (store.vibrate && navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) { /* not allowed */ } } }
   function hexA(h, a) { var v = parseInt(h.slice(1), 16); return 'rgba(' + (v >> 16 & 255) + ',' + (v >> 8 & 255) + ',' + (v & 255) + ',' + a + ')'; }
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -154,10 +157,13 @@
     var st = $('modal-stars'); st.hidden = opts.stars == null;
     if (opts.stars != null) st.innerHTML = [1, 2, 3].map(function (k) { return '<span class="' + (k <= opts.stars ? 'on' : '') + '">★</span>'; }).join('');
     var act = $('modal-actions'); act.innerHTML = '';
+    modal.back = opts.back || null;
     (opts.actions || []).forEach(function (a) {
       var b = document.createElement('button');
       b.className = a.primary ? 'primary' : 'ghost'; b.textContent = a.label;
-      b.addEventListener('click', function () { closeModal(); if (a.run) a.run(); });
+      var run = a.run;
+      if (opts.adGate != null && run) run = function () { Ads.between(opts.adGate, a.run); };
+      b.addEventListener('click', function () { closeModal(); if (run) run(); });
       act.appendChild(b);
     });
     $('modal').hidden = false;
@@ -217,8 +223,6 @@
     $('daily-meta').textContent = d ? 'Done today · ' + '★★★'.slice(0, d)
       : store.streak.n > 1 && store.streak.last === dayKey(-1) ? store.streak.n + '-day streak' : 'New every day';
     $('ai-meta').textContent = store.wins.ai ? store.wins.ai + ' wins' : '3 levels';
-    $('btn-sound').textContent = store.sound ? 'Sound on' : 'Sound off';
-    $('btn-sound').setAttribute('aria-pressed', String(store.sound));
   }
   function renderLevelGrid() {
     var grid = $('level-grid'), html = '', last = Math.ceil((store.level + 5) / 10) * 10;
@@ -266,6 +270,8 @@
     G.timeLeft = G.limit;
     if (cfg.mode === 'journey') { var ch = chapterOf(cfg.level); setTitle(cfg.title, 'Chapter ' + ch.n + ' · ' + ch.name, ch.color); }
     else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : 'Race', null);
+    var pausable = cfg.mode !== 'online';
+    $('btn-quit').textContent = pausable ? '❚❚' : '←'; $('btn-quit').setAttribute('aria-label', pausable ? 'Pause' : 'Leave race');
     G.shownScore = 0; setHeat(0); $('score').textContent = '0'; $('combo-bar').style.width = '0';
     $('hud-solo').hidden = false; $('hud-duel').hidden = true;
     $('rival').hidden = cfg.duel !== 'race';
@@ -348,7 +354,7 @@
     if (G.duel === 'race') {
       Net.send({ t: 'done', score: G.score });
       store.wins.online++; save();
-      modal({ title: 'You won the race!', body: grid, actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }] });
+      modal({ title: 'You won the race!', body: grid, back: leaveGame, actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }] });
       return;
     }
     var title = stars === 3 ? 'Flawless' : 'Board cleared';
@@ -357,7 +363,8 @@
       store.daily[d] = Math.max(prev, stars);
       if (!prev) store.streak = { last: d, n: store.streak.last === dayKey(-1) ? store.streak.n + 1 : 1 };
       save();
-      modal({ title: title, stars: stars, body: grid, actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Play journey', primary: true, run: function () { startLevel(store.level); } }] });
+      Ads.boardFinished();
+      modal({ title: title, stars: stars, body: grid, adGate: 99, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Play journey', primary: true, run: function () { startLevel(store.level); } }] });
       return;
     }
     var L = G.level, newBest = G.score > (store.best[L] || 0);
@@ -366,7 +373,8 @@
     if (L === store.level) store.level++;
     save();
     if (newBest) title += ' · new best';
-    modal({ title: title, stars: stars, body: grid, actions: [{ label: 'Replay', run: function () { startLevel(L); } }, { label: 'Next level', primary: true, run: function () { startLevel(L + 1); } }] });
+    Ads.boardFinished();
+    modal({ title: title, stars: stars, body: grid, adGate: L, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Replay', run: function () { startLevel(L); } }, { label: 'Next level', primary: true, run: function () { startLevel(L + 1); } }] });
   }
 
   function timedFail(reason) {
@@ -379,8 +387,9 @@
       return;
     }
     var cleared = G.lay.n - G.left;
+    Ads.boardFinished();
     modal({
-      title: reason,
+      title: reason, adGate: G.level || 99, back: function () { closeModal(); show('home'); },
       body: 'You cleared ' + cleared + ' of ' + G.lay.n + ' tiles.',
       actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Retry', primary: true, run: function () { G.mode === 'daily' ? startDaily() : startLevel(G.level); } }]
     });
@@ -436,6 +445,7 @@
     Object.assign(G, cfg, { duel: 'turns', turn: cfg.first, scores: [0, 0], moveNo: 0, reshuffles: 0, turnEnd: performance.now() + TURN_MS });
     G.names = cfg.mode === 'local' ? ['Jade', 'Ember'] : cfg.mode === 'ai' ? ['You', 'Computer'] : cfg.me === 0 ? ['You', 'Rival'] : ['Rival', 'You'];
     setTitle(cfg.mode === 'online' ? 'Room ' + Net.code : cfg.mode === 'ai' ? 'Vs computer' : 'Pass & play', cfg.mode === 'ai' ? ['Easy', 'Normal', 'Hard'][cfg.aiLevel] : 'Take turns', null);
+    $('btn-quit').textContent = cfg.mode === 'online' ? '←' : '❚❚'; $('btn-quit').setAttribute('aria-label', cfg.mode === 'online' ? 'Leave match' : 'Pause');
     $('hud-solo').hidden = true; $('hud-duel').hidden = false;
     $('btn-hint').hidden = true; $('btn-shuffle').hidden = true;
     $('emotes').hidden = cfg.mode !== 'online'; $('goal').hidden = cfg.mode === 'online';
@@ -459,6 +469,7 @@
 
   function tickTurns(now) {
     if (!isTurns() || G.over) return;
+    if (G.paused) return;
     var rem = G.turnEnd - now;
     $('turn-fill').style.width = Math.max(0, 100 * rem / TURN_MS) + '%';
     if (rem > 0) return;
@@ -505,8 +516,9 @@
     if (winner === G.me && G.mode === 'ai') store.wins.ai++;
     if (winner === G.me && G.mode === 'online') store.wins.online++;
     save();
+    if (G.mode !== 'online') Ads.boardFinished();
     modal({
-      title: title,
+      title: title, adGate: G.mode === 'online' ? null : 99, back: leaveGame,
       body: resultGrid([[G.names[0], s[0] + ' pts'], [G.names[1], s[1] + ' pts']]),
       actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }]
     });
@@ -515,8 +527,9 @@
   function maybeAi() {
     if (G.mode !== 'ai' || G.over || G.turn === G.me) return;
     var token = G, delay = [2200, 1500, 1000][G.aiLevel] + Math.random() * 900;
-    setTimeout(function () {
+    setTimeout(function step() {
       if (G !== token || G.over || G.turn === G.me) return;
+      if (G.paused || !$('modal').hidden) { setTimeout(step, 400); return; }
       var pr = M.aiPick(G.lay, G.present, G.kinds, G.aiLevel);
       if (!pr) { passTurn(); return; }
       G.sel = pr[0]; board.sel = pr[0]; board.invalidate(); A.select();
@@ -647,6 +660,61 @@
     else toast(text, 4000);
   }
 
+  // ------------------------------------------------------------- pause & settings
+  function canPause() { return !$('game').hidden && G.lay && !G.over && (G.mode === 'journey' || G.mode === 'daily' || G.mode === 'local' || G.mode === 'ai'); }
+  function pauseGame() {
+    if (!canPause() || !$('modal').hidden) return;
+    var turnLeft = isTurns() ? G.turnEnd - performance.now() : 0;
+    G.paused = true;
+    var resume = function () { G.paused = false; if (isTurns()) G.turnEnd = performance.now() + turnLeft; };
+    var restart = function () {
+      G.paused = false;
+      if (G.mode === 'journey') startLevel(G.level); else if (G.mode === 'daily') startDaily();
+      else startTurns({ mode: G.mode, size: G.size, aiLevel: G.aiLevel, me: G.me, first: G.first, seed: Math.floor(Math.random() * 1e9) });
+    };
+    var info = document.createElement('div'); info.className = 'pause-info';
+    if (!isTurns()) info.appendChild(resultGrid([['Time left', fmtTime(G.timeLeft)], ['Tiles left', G.left]]));
+    else info.appendChild(resultGrid([[G.names[0], G.scores[0] + ' pts'], [G.names[1], G.scores[1] + ' pts']]));
+    modal({
+      title: 'Paused', body: info, back: function () { closeModal(); resume(); },
+      actions: [
+        { label: 'Quit', run: function () { G.paused = false; leaveGame(); } },
+        { label: 'Restart', run: restart },
+        { label: 'Settings', run: function () { G.paused = false; openSettings(pauseGame); } },
+        { label: 'Resume', primary: true, run: resume }
+      ]
+    });
+  }
+
+  function toggleRow(label, on, onChange) {
+    var row = document.createElement('button'); row.type = 'button'; row.className = 'setting-row';
+    row.setAttribute('role', 'switch'); row.setAttribute('aria-checked', String(on));
+    row.innerHTML = '<span></span><i class="switch" aria-hidden="true"></i>';
+    row.firstChild.textContent = label;
+    row.addEventListener('click', function () { on = !on; row.setAttribute('aria-checked', String(on)); onChange(on); });
+    return row;
+  }
+  function linkRow(label, fn) {
+    var row = document.createElement('button'); row.type = 'button'; row.className = 'setting-row link-row';
+    row.innerHTML = '<span></span><i aria-hidden="true">›</i>'; row.firstChild.textContent = label;
+    row.addEventListener('click', fn);
+    return row;
+  }
+  function openSettings(after) {
+    var box = document.createElement('div'); box.className = 'settings';
+    box.appendChild(toggleRow('Sound effects', store.sound, function (v) { store.sound = v; A.setEnabled(v); save(); if (v) A.select(); }));
+    box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }));
+    box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(); }));
+    box.appendChild(linkRow('How to play', function () { closeModal(); howTo(after); }));
+    box.appendChild(linkRow('Privacy policy', function () { window.open(PRIVACY_URL, '_blank'); }));
+    if (Ads.hasPrivacyOptions()) box.appendChild(linkRow('Ad privacy choices', function () { Ads.showPrivacyOptions(); }));
+    var ver = document.createElement('p'); ver.className = 'version'; ver.textContent = 'Jade Rush';
+    Shell.versionName().then(function (v) { ver.textContent = 'Jade Rush ' + (v === 'web' ? '· web' : v); });
+    box.appendChild(ver);
+    var done = function () { refreshHome(); if (after) after(); };
+    modal({ title: 'Settings', body: box, back: function () { closeModal(); done(); }, actions: [{ label: 'Done', primary: true, run: done }] });
+  }
+
   // ------------------------------------------------------------- tile sets
   function drawPreview(canvas, theme) {
     var r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2.5);
@@ -719,7 +787,7 @@
   });
   $('btn-online').addEventListener('click', openLobby);
   $('btn-howto').addEventListener('click', function () { howTo(); });
-  $('btn-sound').addEventListener('click', function () { store.sound = !store.sound; A.setEnabled(store.sound); save(); refreshHome(); });
+  $('btn-settings').addEventListener('click', function () { openSettings(); });
   document.querySelectorAll('[data-back]').forEach(function (b) {
     b.addEventListener('click', function () { if (!$('lobby').hidden) Net.close(); show('home'); });
   });
@@ -727,6 +795,7 @@
     var b = e.target.closest('[data-level]'); if (b && !b.disabled) startLevel(Number(b.dataset.level));
   });
   $('btn-quit').addEventListener('click', function () {
+    if (canPause()) { pauseGame(); return; }
     if (G.mode === 'online' && !G.over) modal({ title: 'Leave the match?', body: 'Your rival wins if you leave.', actions: [{ label: 'Stay' }, { label: 'Leave', primary: true, run: leaveGame }] });
     else leaveGame();
   });
@@ -774,7 +843,14 @@
     Net.send({ t: 'emote', e: b.dataset.emote }); showEmote(b.dataset.emote, true);
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('modal').hidden && G.mode !== 'online') closeModal(); });
-  document.addEventListener('visibilitychange', function () { if (G.mode === 'journey' || G.mode === 'daily') G.paused = document.hidden; });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) pauseGame(); });
+  Shell.onPause(pauseGame);
+  Shell.onBack(function () {
+    if (!$('modal').hidden) { if (modal.back) modal.back(); else closeModal(); return true; }
+    if (!$('game').hidden) { $('btn-quit').click(); return true; }
+    if (!$('levels').hidden || !$('lobby').hidden) { if (!$('lobby').hidden) Net.close(); show('home'); return true; }
+    return false;
+  });
   window.addEventListener('pointerdown', function () { A.unlock(); }, { once: true });
   if (window.ResizeObserver) new ResizeObserver(function () { board.resize(); }).observe($('board-wrap'));
   else window.addEventListener('resize', function () { board.resize(); });
@@ -823,7 +899,11 @@
   window.JadeRush = { state: function () { return G; }, board: board }; // read-only hook for automated tests
 
   applyTheme();
+  Shell.styleBars(currentTheme().bg[0]);
   show('home');
+  var hideLoader = function () { var l = $('loader'); if (l && !l.classList.contains('done')) { l.classList.add('done'); setTimeout(function () { l.remove(); }, 500); } };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { setTimeout(hideLoader, 250); });
+  setTimeout(hideLoader, 1500);
   demo.resize(); newDemo();
   requestAnimationFrame(loop);
   var room = new URLSearchParams(location.search).get('room');

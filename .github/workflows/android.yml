@@ -1,0 +1,186 @@
+name: Android build
+
+on:
+  push:
+    branches: [ccr-61d5e997-33280i]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VERSION_NAME: 1.0.0
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      code: ${{ steps.meta.outputs.code }}
+      signed: ${{ steps.sign.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Version code
+        id: meta
+        run: echo "code=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        run: npm ci
+
+      - name: Game engine tests
+        run: npm test
+
+      - name: Copy web game into the Android project
+        run: npm run build && npx cap sync android
+
+      - name: Release signing (only when keystore secrets are configured)
+        id: sign
+        env:
+          KEYSTORE_B64: ${{ secrets.JADE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            echo "JADE_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Lint, debug APK and release bundle
+        working-directory: android
+        env:
+          JADE_VERSION_CODE: ${{ steps.meta.outputs.code }}
+          JADE_KEYSTORE_PASSWORD: ${{ secrets.JADE_KEYSTORE_PASSWORD }}
+          JADE_KEY_ALIAS: ${{ secrets.JADE_KEY_ALIAS }}
+          JADE_KEY_PASSWORD: ${{ secrets.JADE_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace lintDebug assembleDebug bundleRelease
+
+      - name: Collect outputs
+        run: |
+          mkdir -p dist
+          CODE=${{ steps.meta.outputs.code }}
+          SUFFIX=$([ "${{ steps.sign.outputs.signed }}" = "true" ] && echo "release" || echo "release-unsigned")
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/jade-rush-${VERSION_NAME}-${CODE}-debug.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "dist/jade-rush-${VERSION_NAME}-${CODE}-${SUFFIX}.aab"
+          cp android/app/build/reports/lint-results-debug.html dist/lint-report.html || true
+          cp android/app/build/reports/lint-results-debug.xml dist/lint-report.xml || true
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: builds
+          path: dist/
+
+  emulator:
+    name: Emulator tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: builds
+          path: dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Test tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        run: |
+          npm install --no-save playwright@1.56.1
+          gh release download -R google/bundletool --pattern 'bundletool-all-*.jar' -O bundletool.jar
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run on Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            export DEBUG_APK=$(ls dist/*-debug.apk) && node ci/android-e2e.mjs
+            export RELEASE_AAB=$(ls dist/*.aab) && bash ci/release-smoke.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-results
+          path: e2e-out/
+
+  release:
+    name: Publish GitHub release
+    needs: [build, emulator]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: builds
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: emulator-results
+          path: e2e
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ needs.build.outputs.code }}
+          TESTS: ${{ needs.emulator.result }}
+        run: |
+          if [ -d e2e ]; then (cd e2e && zip -q -r ../dist/emulator-test-results.zip .); fi
+          {
+            echo "Jade Rush ${VERSION_NAME} (version code ${CODE})"
+            echo
+            echo "- jade-rush-*-debug.apk: install directly on a phone for testing (shows Google test ads)."
+            echo "- jade-rush-*.aab: the release bundle for Google Play."
+            echo "- emulator-test-results.zip: screenshots, logcat and the test report."
+            echo
+            echo "Emulator tests: ${TESTS}"
+            if [ -f e2e/report.txt ]; then echo; echo '```'; cat e2e/report.txt; echo '```'; fi
+          } > notes.md
+          gh release create "build-${CODE}" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Jade Rush ${VERSION_NAME} (build ${CODE})" --notes-file notes.md --prerelease

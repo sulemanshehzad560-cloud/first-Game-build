@@ -1,0 +1,23 @@
+{
+  "name": "jade-rush",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jade Rush: a timed Mahjong tile-matching game with endless levels and duels.",
+  "scripts": {
+    "test": "node tests/mahjong.test.js",
+    "build": "node tools/build-www.mjs",
+    "assets": "node tools/gen-assets.mjs",
+    "android:sync": "npm run build && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor-community/admob": "8.1.0",
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/status-bar": "8.0.3",
+    "peerjs": "1.5.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "appId": "com.sulemanshehzad.jaderush",
+  "appName": "Jade Rush",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0b2621",
+    "allowMixedContent": false,
+    "captureInput": true
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "overlaysWebView": true,
+      "backgroundColor": "#00000000"
+    }
+  }
+}
