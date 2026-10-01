@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<canvas id="bg" aria-hidden="true"></canvas>
 <main id="app">
   <!-- HOME -->
   <section id="home" class="screen">
@@ -24,26 +25,35 @@
 
     <nav class="menu">
       <button id="btn-continue" class="cta">
-        <span class="cta-eyebrow">Journey</span>
+        <span class="cta-shine" aria-hidden="true"></span>
+        <span class="cta-eyebrow" id="continue-chapter">Chapter 1 · Bamboo Grove</span>
         <span class="cta-title" id="continue-label">Level 1</span>
         <span class="cta-meta" id="continue-meta">Endless levels</span>
+        <span class="cta-play" aria-hidden="true">▶</span>
       </button>
-      <div class="pair">
-        <button id="btn-levels" class="tile">
+      <div class="trio">
+        <button id="btn-levels" class="tile t-teal">
+          <span class="mini" aria-hidden="true">一</span>
           <span class="tile-title">Level map</span>
           <span class="tile-meta" id="levels-meta">Replay for 3 ★</span>
         </button>
-        <button id="btn-daily" class="tile">
+        <button id="btn-daily" class="tile t-amber">
+          <span class="mini" aria-hidden="true">東</span>
           <span class="tile-title">Daily board</span>
-          <span class="tile-meta" id="daily-meta">New board every day</span>
+          <span class="tile-meta" id="daily-meta">New every day</span>
+        </button>
+        <button id="btn-themes" class="tile t-pink">
+          <span class="mini" aria-hidden="true">發</span>
+          <span class="tile-title">Tile sets</span>
+          <span class="tile-meta" id="themes-meta">1 of 6 unlocked</span>
         </button>
       </div>
 
       <h2 class="section-label">Duel <span>2 players</span></h2>
       <div class="trio">
-        <button id="btn-online" class="tile duel"><span class="tile-title">Online</span><span class="tile-meta">Race or take turns</span></button>
-        <button id="btn-local" class="tile duel"><span class="tile-title">Pass &amp; play</span><span class="tile-meta">One device</span></button>
-        <button id="btn-ai" class="tile duel"><span class="tile-title">Vs computer</span><span class="tile-meta" id="ai-meta">3 levels</span></button>
+        <button id="btn-online" class="tile t-violet"><span class="mini" aria-hidden="true">中</span><span class="tile-title">Online</span><span class="tile-meta">Race or take turns</span></button>
+        <button id="btn-local" class="tile t-coral"><span class="mini" aria-hidden="true">南</span><span class="tile-title">Pass &amp; play</span><span class="tile-meta">One device</span></button>
+        <button id="btn-ai" class="tile t-blue"><span class="mini" aria-hidden="true">北</span><span class="tile-title">Vs computer</span><span class="tile-meta" id="ai-meta">3 levels</span></button>
       </div>
     </nav>
 
@@ -60,7 +70,7 @@
       <h2 class="bar-title">Level map</h2>
       <span class="bar-side" id="levels-stars">0 ★</span>
     </header>
-    <div class="level-grid" id="level-grid"></div>
+    <div class="level-scroll" id="level-grid"></div>
   </section>
 
   <!-- ONLINE LOBBY -->
@@ -124,7 +134,7 @@
       <div class="clock"><i id="clock-fill"></i><span id="clock-text">0:00</span></div>
       <div class="stats">
         <div><span class="label">Score</span><b id="score">0</b></div>
-        <div><span class="label">Combo</span><b id="combo">×1</b></div>
+        <div class="combo-box"><span class="label">Combo</span><b id="combo">×1</b><i id="combo-bar"></i></div>
         <div><span class="label">Tiles left</span><b id="left">0</b></div>
       </div>
       <div class="rival" id="rival" hidden>
@@ -146,6 +156,7 @@
     <div class="board-wrap" id="board-wrap">
       <canvas id="board"></canvas>
       <div id="fx-layer" aria-live="polite"></div>
+      <div id="banner" class="banner" hidden></div>
     </div>
 
     <div class="foot">
@@ -166,6 +177,7 @@
   </div>
 </div>
 <div id="toast" class="toast" hidden></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
 <script src="js/mahjong.js" defer></script>

@@ -8,13 +8,132 @@
 
   // ------------------------------------------------------------- storage
   var SAVE_KEY = 'jaderush.v1';
-  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false };
+  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade' };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
   function totalStars() { var s = 0; for (var k in store.stars) s += store.stars[k]; return s; }
   function dayKey(offset) { var d = new Date(Date.now() + (offset || 0) * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function fmtTime(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
   A.setEnabled(store.sound);
+
+  // ------------------------------------------------------------- tile sets, chapters, juice
+  var THEMES = window.MahjongTiles.THEMES;
+  var CHAPTERS = [
+    { name: 'Bamboo Grove', color: '#2ee6b6' }, { name: 'Lotus Pond', color: '#ff6fae' },
+    { name: 'Koi River', color: '#ff8a5c' }, { name: 'Moon Gate', color: '#47b8ff' },
+    { name: 'Plum Blossom', color: '#ff5f6d' }, { name: 'Dragon Peak', color: '#a879ff' },
+    { name: 'Golden Pagoda', color: '#ffc94a' }, { name: 'Cloud Palace', color: '#7cffcb' }
+  ];
+  var ROMAN = ['', '', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X'];
+  function chapterOf(L) {
+    var idx = Math.floor((L - 1) / 10), c = CHAPTERS[idx % CHAPTERS.length], cycle = Math.floor(idx / CHAPTERS.length) + 1;
+    return { n: idx + 1, name: c.name + (cycle === 1 ? '' : ROMAN[cycle] || ' ' + cycle), color: c.color };
+  }
+  function currentTheme() {
+    var t = THEMES.filter(function (x) { return x.id === store.theme; })[0];
+    return t && totalStars() >= t.stars ? t : THEMES[0];
+  }
+  function applyTheme() {
+    var t = currentTheme(), st = document.documentElement.style;
+    st.setProperty('--bg0', t.bg[0]); st.setProperty('--bg1', t.bg[1]);
+    st.setProperty('--glowA', t.bg[2]); st.setProperty('--glowB', t.bg[3]); st.setProperty('--accent', t.accent);
+    var meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t.bg[0];
+    board.setTheme(t); demo.setTheme(t); sky.setTheme(t);
+  }
+  function buzz(pattern) { if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) { /* not allowed */ } } }
+  function hexA(h, a) { var v = parseInt(h.slice(1), 16); return 'rgba(' + (v >> 16 & 255) + ',' + (v >> 8 & 255) + ',' + (v & 255) + ',' + a + ')'; }
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Animated table: slow colored light blobs and drifting sparkles in the active set's colors.
+  var sky = (function () {
+    var c = $('bg'), g = c.getContext('2d'), W = 0, H = 0, theme = THEMES[0], sparks = [], drawn = false;
+    var blobs = [[0.15, 0.12, 0.7, 2, 0.00011], [0.9, 0.35, 0.55, 3, 0.00008], [0.3, 0.9, 0.65, 3, 0.00013], [0.8, 0.95, 0.5, 2, 0.0001]];
+    function resize() {
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = innerWidth; H = innerHeight; c.width = W * dpr; c.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      sparks = [];
+      for (var k = 0; k < Math.round(W * H / 14000); k++) sparks.push({ x: Math.random() * W, y: Math.random() * H, r: 0.6 + Math.random() * 1.8, s: 0.004 + Math.random() * 0.012, p: Math.random() * 6.28 });
+      drawn = false;
+    }
+    function frame(now) {
+      if (reduced && drawn) return;
+      drawn = true;
+      var base = g.createLinearGradient(0, 0, 0, H);
+      base.addColorStop(0, theme.bg[1]); base.addColorStop(1, theme.bg[0]);
+      g.fillStyle = base; g.fillRect(0, 0, W, H);
+      var m = Math.max(W, H);
+      blobs.forEach(function (b, k) {
+        var x = (b[0] + Math.sin(now * b[4] + k) * 0.08) * W, y = (b[1] + Math.cos(now * b[4] * 1.3 + k) * 0.06) * H;
+        var gr = g.createRadialGradient(x, y, 0, x, y, b[2] * m);
+        gr.addColorStop(0, hexA(theme.bg[b[3]], 0.32)); gr.addColorStop(1, hexA(theme.bg[b[3]], 0));
+        g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      });
+      for (var k = 0; k < sparks.length; k++) {
+        var sp = sparks[k], yy = (sp.y - now * sp.s) % H;
+        if (yy < 0) yy += H;
+        g.fillStyle = hexA(k % 3 ? '#ffffff' : theme.accent, 0.25 + 0.35 * Math.sin(sp.p + now / 700));
+        g.beginPath(); g.arc(sp.x + Math.sin(now / 2000 + sp.p) * 8, yy, sp.r, 0, 6.283); g.fill();
+      }
+    }
+    window.addEventListener('resize', resize);
+    resize();
+    return { frame: frame, setTheme: function (t) { theme = t; drawn = false; } };
+  })();
+
+  // Confetti for wins.
+  var confetti = (function () {
+    var c = $('confetti'), g = c.getContext('2d'), parts = [], dirty = false;
+    function resize() { var dpr = Math.min(window.devicePixelRatio || 1, 2); c.width = innerWidth * dpr; c.height = innerHeight * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0); }
+    window.addEventListener('resize', resize); resize();
+    return {
+      burst: function (n) {
+        if (reduced) return;
+        var t = currentTheme(), cols = [t.accent, t.bg[2], t.bg[3], '#ff6fae', '#47cdff', '#ffffff', '#7cffcb'];
+        for (var k = 0; k < n; k++) parts.push({ x: innerWidth * (0.2 + Math.random() * 0.6), y: innerHeight * 0.35, vx: (Math.random() - 0.5) * 0.9, vy: -0.4 - Math.random() * 0.7, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.02, w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, c: cols[k % cols.length], life: 2600 + Math.random() * 1200, age: 0 });
+      },
+      frame: function (dt) {
+        if (!parts.length) { if (dirty) { g.clearRect(0, 0, innerWidth, innerHeight); dirty = false; } return; }
+        dirty = true; g.clearRect(0, 0, innerWidth, innerHeight);
+        for (var k = parts.length - 1; k >= 0; k--) {
+          var p = parts[k]; p.age += dt;
+          if (p.age > p.life) { parts.splice(k, 1); continue; }
+          p.vy += 0.0012 * dt; p.vx *= 0.995; p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.vr * dt;
+          g.save(); g.globalAlpha = Math.min(1, (p.life - p.age) / 500);
+          g.translate(p.x, p.y); g.rotate(p.r); g.scale(1, Math.cos(p.age / 120));
+          g.fillStyle = p.c; g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); g.restore();
+        }
+      }
+    };
+  })();
+
+  function banner(text) {
+    var el = $('banner');
+    el.textContent = text; el.hidden = false;
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    clearTimeout(banner.t); banner.t = setTimeout(function () { el.hidden = true; }, 1250);
+  }
+  function setHeat(combo) {
+    var w = $('board-wrap');
+    w.classList.toggle('heat-1', combo >= 3 && combo < 6);
+    w.classList.toggle('heat-2', combo >= 6 && combo < 9);
+    w.classList.toggle('heat-3', combo >= 9);
+  }
+  function bump(el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+  function countUp(root) {
+    root.querySelectorAll('[data-to]').forEach(function (el) {
+      var to = Number(el.dataset.to), pre = el.dataset.pre || '', t0 = performance.now();
+      (function step(now) {
+        var t = Math.min(1, (now - t0) / 900), v = Math.round(to * (1 - Math.pow(1 - t, 3)));
+        el.textContent = pre + v;
+        if (t < 1) requestAnimationFrame(step);
+      })(t0);
+    });
+  }
+  function setTitle(main, sub, color) {
+    var h = $('game-title'); h.textContent = main;
+    if (sub) { var sm = document.createElement('small'); sm.textContent = sub; h.insertBefore(sm, h.firstChild); }
+    $('game').style.setProperty('--chapter', color || 'var(--accent)');
+  }
 
   // ------------------------------------------------------------- ui helpers
   var screens = ['home', 'levels', 'lobby', 'game'];
@@ -42,13 +161,20 @@
       act.appendChild(b);
     });
     $('modal').hidden = false;
+    countUp(body);
     var first = act.querySelector('.primary') || act.querySelector('button');
     if (first) first.focus({ preventScroll: true });
   }
   function closeModal() { $('modal').hidden = true; }
   function resultGrid(pairs) {
     var d = document.createElement('div'); d.className = 'result-grid';
-    pairs.forEach(function (p) { var c = document.createElement('div'); c.innerHTML = '<span class="label"></span><b></b>'; c.firstChild.textContent = p[0]; c.lastChild.textContent = p[1]; d.appendChild(c); });
+    pairs.forEach(function (p) {
+      var c = document.createElement('div'); c.innerHTML = '<span class="label"></span><b></b>';
+      c.firstChild.textContent = p[0]; c.lastChild.textContent = p[1];
+      var m = /^([+]?)(\d+)$/.exec(String(p[1]));
+      if (m && !reduced) { c.lastChild.dataset.to = m[2]; c.lastChild.dataset.pre = m[1]; c.lastChild.textContent = m[1] + '0'; }
+      d.appendChild(c);
+    });
     return d;
   }
   function chipGroup(label, options, value, onPick) {
@@ -80,23 +206,33 @@
   // ------------------------------------------------------------- home
   function refreshHome() {
     var d = store.daily[dayKey()];
+    var ch = chapterOf(store.level);
     $('continue-label').textContent = 'Level ' + store.level;
+    $('continue-chapter').textContent = 'Chapter ' + ch.n + ' · ' + ch.name;
+    $('btn-continue').style.setProperty('--chapter', ch.color);
+    var unlocked = THEMES.filter(function (t) { return totalStars() >= t.stars; }).length;
+    $('themes-meta').textContent = unlocked + ' of ' + THEMES.length + ' unlocked';
     $('continue-meta').textContent = 'Endless levels · ' + totalStars() + ' ★ collected';
     $('levels-meta').textContent = (store.level - 1) + ' cleared';
     $('daily-meta').textContent = d ? 'Done today · ' + '★★★'.slice(0, d)
-      : store.streak.n > 1 && store.streak.last === dayKey(-1) ? store.streak.n + '-day streak' : 'New board every day';
+      : store.streak.n > 1 && store.streak.last === dayKey(-1) ? store.streak.n + '-day streak' : 'New every day';
     $('ai-meta').textContent = store.wins.ai ? store.wins.ai + ' wins' : '3 levels';
     $('btn-sound').textContent = store.sound ? 'Sound on' : 'Sound off';
     $('btn-sound').setAttribute('aria-pressed', String(store.sound));
   }
   function renderLevelGrid() {
-    var grid = $('level-grid'), html = '';
-    for (var L = 1; L <= store.level + 5; L++) {
+    var grid = $('level-grid'), html = '', last = Math.ceil((store.level + 5) / 10) * 10;
+    for (var L = 1; L <= last; L++) {
+      if ((L - 1) % 10 === 0) {
+        var ch = chapterOf(L), got = 0;
+        for (var q = L; q < L + 10; q++) got += store.stars[q] || 0;
+        html += (L > 1 ? '</div></section>' : '') + '<section class="chapter" style="--c:' + ch.color + '"><h3>' + ch.name + '<span>' + got + ' / 30 ★</span></h3><div class="level-grid">';
+      }
       var s = store.stars[L] || 0, locked = L > store.level;
       html += '<button class="lvl' + (L === store.level ? ' current' : '') + '" data-level="' + L + '"' + (locked ? ' disabled' : '') + '>' + L +
         '<small>' + (locked ? '' : '★★★'.slice(0, s) || '·') + '</small></button>';
     }
-    grid.innerHTML = html;
+    grid.innerHTML = html + '</div></section>';
     $('levels-stars').textContent = totalStars() + ' ★';
     var cur = grid.querySelector('.current'); if (cur) cur.scrollIntoView({ block: 'center' });
   }
@@ -128,13 +264,15 @@
       rival: { left: gen.layout.n, done: false, out: false, score: 0 }
     });
     G.timeLeft = G.limit;
-    $('game-title').textContent = cfg.title;
+    if (cfg.mode === 'journey') { var ch = chapterOf(cfg.level); setTitle(cfg.title, 'Chapter ' + ch.n + ' · ' + ch.name, ch.color); }
+    else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : 'Race', null);
+    G.shownScore = 0; setHeat(0); $('score').textContent = '0'; $('combo-bar').style.width = '0';
     $('hud-solo').hidden = false; $('hud-duel').hidden = true;
     $('rival').hidden = cfg.duel !== 'race';
     $('btn-hint').hidden = false; $('btn-shuffle').hidden = false;
     $('emotes').hidden = cfg.duel !== 'race'; $('goal').hidden = cfg.duel === 'race';
     $('goal').textContent = gen.spec.showFree ? 'Match free tiles in pairs. Dimmed tiles are blocked.' : 'Free tiles are no longer highlighted. Look closely.';
-    board.accent = '#e8b64c';
+    board.accent = currentTheme().accent;
     mountBoard(gen.spec.showFree && cfg.duel !== 'race');
     updateTimedHud();
   }
@@ -147,10 +285,10 @@
   function startDaily() { startTimed(M.generateDaily(dayKey()), { mode: 'daily', title: 'Daily board' }); }
 
   function updateTimedHud() {
-    $('score').textContent = G.score;
-    $('combo').textContent = '×' + Math.max(1, G.combo);
-    $('combo').classList.toggle('hot', G.combo >= 3);
-    $('left').textContent = G.left;
+    var cb = $('combo'), c = Math.max(1, G.combo);
+    if (cb.textContent !== '×' + c) { cb.textContent = '×' + c; if (c > 1) bump(cb); }
+    cb.className = c >= 10 ? 't4' : c >= 7 ? 't3' : c >= 5 ? 't2' : c >= 3 ? 't1' : '';
+    if ($('left').textContent !== String(G.left)) { $('left').textContent = G.left; bump($('left')); }
     $('hint-count').textContent = G.hints; $('btn-hint').disabled = G.hints <= 0;
     $('shuffle-count').textContent = G.shuffles; $('btn-shuffle').disabled = G.shuffles <= 0;
     if (G.duel === 'race') {
@@ -185,8 +323,10 @@
     G.score += pts;
     var mp = midpoint(a, b);
     floatText('+' + pts, mp[0], mp[1], G.combo >= 4);
-    if (G.combo >= 3) floatText('Combo ×' + G.combo, mp[0], mp[1] - 34, false, '#fff2c9');
-    A.match(G.combo);
+    var tier = { 3: 'Nice!', 5: 'Great!', 7: 'Amazing!', 9: 'Incredible!', 12: 'Legendary!' }[G.combo];
+    if (tier) banner(tier);
+    setHeat(G.combo);
+    A.match(G.combo); buzz(G.combo >= 5 ? [12, 30, 12] : 12);
     $('btn-shuffle').classList.remove('attention');
     if (G.duel === 'race') Net.send({ t: 'prog', left: G.left, score: G.score });
     updateTimedHud();
@@ -205,6 +345,7 @@
     var stars = frac >= 0.4 && !G.usedHint ? 3 : frac >= 0.2 ? 2 : 1;
     A.win();
     var grid = resultGrid([['Score', G.score], ['Time left', fmtTime(G.timeLeft)], ['Best combo', '×' + G.bestCombo], ['Time bonus', '+' + bonus]]);
+    confetti.burst(stars === 3 ? 220 : 120); setHeat(0); buzz([20, 40, 20, 40, 60]);
     if (G.duel === 'race') {
       Net.send({ t: 'done', score: G.score });
       store.wins.online++; save();
@@ -280,7 +421,9 @@
     if (G.shuffles <= 0) { toast('No shuffles left on this board.'); return; }
     var next = M.reshuffle(G.lay, G.present, G.kinds, Math.random);
     if (!next) { timedFail('No moves left'); return; }
-    G.kinds = next; board.kinds = next; G.sel = -1; board.sel = -1; board.hint = [];
+    var old = G.kinds;
+    G.kinds = next; board.kinds = next; G.sel = -1; board.sel = -1; board.hint = []; board.partners = [];
+    board.flipFrom(old); buzz([8, 30, 8, 30, 8]);
     G.gen = Object.assign({}, G.gen, { solution: [] });
     G.shuffles--; A.shuffle(); board.invalidate();
     $('btn-shuffle').classList.remove('attention');
@@ -293,7 +436,7 @@
     G = baseState(gen);
     Object.assign(G, cfg, { duel: 'turns', turn: cfg.first, scores: [0, 0], moveNo: 0, reshuffles: 0, turnEnd: performance.now() + TURN_MS });
     G.names = cfg.mode === 'local' ? ['Jade', 'Ember'] : cfg.mode === 'ai' ? ['You', 'Computer'] : cfg.me === 0 ? ['You', 'Rival'] : ['Rival', 'You'];
-    $('game-title').textContent = cfg.mode === 'online' ? 'Room ' + Net.code : cfg.mode === 'ai' ? 'Vs computer · ' + ['Easy', 'Normal', 'Hard'][cfg.aiLevel] : 'Pass & play';
+    setTitle(cfg.mode === 'online' ? 'Room ' + Net.code : cfg.mode === 'ai' ? 'Vs computer' : 'Pass & play', cfg.mode === 'ai' ? ['Easy', 'Normal', 'Hard'][cfg.aiLevel] : 'Take turns', null);
     $('hud-solo').hidden = true; $('hud-duel').hidden = false;
     $('btn-hint').hidden = true; $('btn-shuffle').hidden = true;
     $('emotes').hidden = cfg.mode !== 'online'; $('goal').hidden = cfg.mode === 'online';
@@ -312,7 +455,7 @@
     var who = G.names[G.turn];
     $('turn-note').textContent = G.over ? 'Game over' : who === 'You' ? 'Your turn' : G.mode === 'local' ? who + '’s turn' : who + ' is thinking…';
     board.accent = COLORS[G.turn];
-    board.invalidate();
+    board.partners = []; board.invalidate();
   }
 
   function tickTurns(now) {
@@ -360,7 +503,7 @@
     G.over = true; updateDuelHud();
     var s = G.scores, winner = s[0] === s[1] ? -1 : s[0] > s[1] ? 0 : 1;
     var title = winner < 0 ? 'Draw' : G.mode === 'local' ? G.names[winner] + ' wins!' : winner === G.me ? 'You win!' : G.names[winner] + ' wins';
-    if (winner === G.me || G.mode === 'local') A.win(); else A.lose();
+    if (winner === G.me || G.mode === 'local') { A.win(); confetti.burst(160); } else A.lose();
     if (winner === G.me && G.mode === 'ai') store.wins.ai++;
     if (winner === G.me && G.mode === 'online') store.wins.online++;
     save();
@@ -385,6 +528,7 @@
 
   // ------------------------------------------------------------- input
   function applyMatch(a, b, remote) {
+    if (!remote) buzz(12);
     G.present[a] = 0; G.present[b] = 0; G.left -= 2;
     G.sel = -1; board.sel = -1;
     board.matched(a, b, isTurns() ? COLORS[G.turn] : '#e8b64c');
@@ -392,12 +536,13 @@
   }
 
   function onTileTap(i) {
-    if (G.over || !G.lay) return;
+    if (G.over || !G.lay || board.busy()) return;
     if (isTurns() && G.mode !== 'local' && G.turn !== G.me) { toast('Wait for your turn.', 1100); return; }
-    if (!M.isFree(G.lay, G.present, i)) { A.blocked(); board.wrong(i); return; }
-    if (G.sel === i) { G.sel = -1; board.sel = -1; board.invalidate(); return; }
+    if (!M.isFree(G.lay, G.present, i)) { A.blocked(); board.wrong(i); buzz([15, 40, 15]); return; }
+    if (G.sel === i) { G.sel = -1; board.sel = -1; board.partners = []; board.invalidate(); return; }
     if (G.sel >= 0 && G.kinds[G.sel] === G.kinds[i]) { applyMatch(G.sel, i, false); return; }
-    G.sel = i; board.sel = i; board.invalidate(); A.select();
+    G.sel = i; board.sel = i; board.hover = -1; board.invalidate(); A.select(); buzz(6);
+    board.partners = board.showFree ? M.freeTiles(G.lay, G.present).filter(function (j) { return j !== i && G.kinds[j] === G.kinds[i]; }) : [];
   }
 
   function rematch() {
@@ -499,6 +644,41 @@
     else toast(text, 4000);
   }
 
+  // ------------------------------------------------------------- tile sets
+  function drawPreview(canvas, theme) {
+    var r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+    var pb = new window.TileBoard(canvas), g = canvas.getContext('2d');
+    pb.setTheme(theme); pb.dpr = dpr;
+    pb.fh = r.height * 0.78; pb.fw = pb.fh / 1.3; pb.dz = pb.fw * 0.13;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var total = pb.fw * 3 + 8, x0 = (r.width - total) / 2 + pb.dz;
+    [31, 4, 9].forEach(function (kind, k) {
+      pb.drawTile(g, { x: x0 + k * (pb.fw + 4), y: 2 + (k === 1 ? 0 : pb.dz * 0.6), w: pb.fw, h: pb.fh }, kind, {});
+    });
+  }
+  function openThemes() {
+    var stars = totalStars(), cur = currentTheme(), box = document.createElement('div');
+    box.style.display = 'grid'; box.style.gap = '12px';
+    var p = document.createElement('p'); p.textContent = 'You have ' + stars + ' ★. Clear levels with more stars to unlock new sets.';
+    var grid = document.createElement('div'); grid.className = 'themes';
+    THEMES.forEach(function (t) {
+      var locked = stars < t.stars, b = document.createElement('button');
+      b.className = 'theme-card'; b.type = 'button'; b.disabled = locked;
+      b.setAttribute('aria-pressed', String(t.id === cur.id));
+      b.innerHTML = '<canvas></canvas><b></b><small></small>';
+      b.querySelector('b').textContent = t.name;
+      b.querySelector('small').textContent = locked ? '★ ' + t.stars + ' to unlock' : t.id === cur.id ? 'In use' : 'Tap to use';
+      b.addEventListener('click', function () { store.theme = t.id; save(); applyTheme(); A.select(); openThemes(); });
+      grid.appendChild(b);
+    });
+    box.appendChild(p); box.appendChild(grid);
+    modal({ title: 'Tile sets', body: box, actions: [{ label: 'Done', primary: true, run: refreshHome }] });
+    requestAnimationFrame(function () {
+      grid.querySelectorAll('canvas').forEach(function (c, k) { drawPreview(c, THEMES[k]); });
+    });
+  }
+
   // ------------------------------------------------------------- how to play
   function howTo(after) {
     var ol = document.createElement('ol'); ol.className = 'howto';
@@ -549,6 +729,21 @@
   });
   $('btn-hint').addEventListener('click', useHint);
   $('btn-shuffle').addEventListener('click', useShuffle);
+  $('board').addEventListener('pointermove', function (e) {
+    if (e.pointerType !== 'mouse' || !G.lay || G.over || board.busy()) return;
+    board.setHover(board.hit(e.clientX, e.clientY));
+    $('board').style.cursor = board.hover >= 0 ? 'pointer' : 'default';
+  });
+  $('board').addEventListener('pointerleave', function () { board.setHover(-1); });
+  $('btn-themes').addEventListener('click', openThemes);
+  document.addEventListener('pointerdown', function (e) {
+    var b = e.target.closest && e.target.closest('.cta, .tile, .primary, .ghost, .chip, .theme-card, .lvl');
+    if (!b || b.disabled || reduced) return;
+    var r = b.getBoundingClientRect(), s = Math.max(r.width, r.height), sp = document.createElement('span');
+    sp.className = 'ripple'; sp.style.width = sp.style.height = s + 'px';
+    sp.style.left = (e.clientX - r.left - s / 2) + 'px'; sp.style.top = (e.clientY - r.top - s / 2) + 'px';
+    b.appendChild(sp); setTimeout(function () { sp.remove(); }, 600);
+  });
   $('board').addEventListener('pointerdown', function (e) {
     A.unlock();
     var i = board.hit(e.clientX, e.clientY);
@@ -602,7 +797,19 @@
   var last = performance.now();
   function loop(now) {
     var dt = Math.min(250, now - last); last = now;
+    sky.frame(now);
+    confetti.frame(dt);
     if (!$('home').hidden) { stepDemo(now); demo.frame(now); }
+    if (!$('game').hidden && G.lay && !isTurns() && G.limit) {
+      if (G.shownScore !== G.score) {
+        G.shownScore += Math.max(1, Math.ceil((G.score - G.shownScore) * 0.18));
+        if (G.shownScore > G.score) G.shownScore = G.score;
+        $('score').textContent = G.shownScore;
+      }
+      var win = G.lastMatch ? 1 - (now - G.lastMatch) / COMBO_MS : 0;
+      $('combo-bar').style.width = Math.max(0, win * 100) + '%';
+      if (win <= 0 && G.combo > 0 && !G.over) { G.combo = 0; setHeat(0); updateTimedHud(); }
+    }
     if (!$('game').hidden && G.lay) { tickTimed(dt); tickTurns(now); board.frame(now); }
     requestAnimationFrame(loop);
   }
@@ -612,6 +819,7 @@
 
   window.JadeRush = { state: function () { return G; }, board: board }; // read-only hook for automated tests
 
+  applyTheme();
   show('home');
   demo.resize(); newDemo();
   requestAnimationFrame(loop);

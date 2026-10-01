@@ -16,6 +16,8 @@ Most kinds have four copies, so taking the wrong pair can bury the tile you need
 | **Online: Take turns** | One shared board. Each turn you make one match, with 15 seconds per turn. Winds and dragons are worth 2 points. Highest score wins. |
 | **Pass & play / Vs computer** | Take-turns duel on one device, or against an AI (Easy, Normal, Hard). Hard also avoids leaving you high-value pairs. |
 
+Look and feel: six unlockable tile sets (Jade, Sakura, Lagoon, Ember, Royal, Obsidian) that recolor the tiles and the animated table, chapters of 10 levels, tiles that lift on hover and selection, matched pairs that fly together and burst, flip animations on shuffle, combo banners, confetti, and haptics on phones.
+
 What keeps it challenging: combo multipliers for matching within 5 seconds, hints that cost 10 seconds, limited shuffles, a time bonus, and per-level best scores.
 
 ## Run it
