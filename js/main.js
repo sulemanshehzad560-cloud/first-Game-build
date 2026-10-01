@@ -653,11 +653,11 @@
     canvas.width = r.width * dpr; canvas.height = r.height * dpr;
     var pb = new window.TileBoard(canvas), g = canvas.getContext('2d');
     pb.setTheme(theme); pb.dpr = dpr;
-    pb.fh = r.height * 0.78; pb.fw = pb.fh / 1.3; pb.dz = pb.fw * 0.13;
+    pb.fh = r.height * 0.8; pb.fw = pb.fh / 1.3; pb.dz = pb.fw * 0.1;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    var total = pb.fw * 3 + 8, x0 = (r.width - total) / 2 + pb.dz;
+    var total = pb.fw * 3 + 8, x0 = (r.width - total) / 2;
     [31, 4, 9].forEach(function (kind, k) {
-      pb.drawTile(g, { x: x0 + k * (pb.fw + 4), y: 2 + (k === 1 ? 0 : pb.dz * 0.6), w: pb.fw, h: pb.fh }, kind, {});
+      pb.drawTile(g, { x: x0 + k * (pb.fw + 4), y: 2 + (k === 1 ? 0 : pb.dz * 0.6), w: pb.fw, h: pb.fh }, kind, { variant: k });
     });
   }
   function openThemes() {

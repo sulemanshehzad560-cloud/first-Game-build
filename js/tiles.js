@@ -6,21 +6,22 @@
   var NUMERALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
   var WINDS = ['東', '南', '西', '北'];
 
-  // Materials: face = polished front, body = the bone-colored layer seen on the side,
-  // back = the dyed back layer. bg = [deep, mid, glow A, glow B] for the table.
+  // Wood materials: face = the top surface (two tones for the grain gradient), grain = ring-line color,
+  // body = the wood seen on the edge, back = the dyed back layer. pal picks paint (light woods) or
+  // inlay (dark woods). bg = [deep, mid, glow A, glow B] for the table.
   var THEMES = [
-    { id: 'jade', name: 'Jade', stars: 0, face: ['#fffaf0', '#efe4cc'], body: ['#f3e8cf', '#d8c8a6'], back: ['#1f9a6f', '#0a4a35'], pal: 'light', accent: '#ffc94a', bg: ['#0b2621', '#145244', '#2bc293', '#ffc94a'] },
-    { id: 'sakura', name: 'Sakura', stars: 12, face: ['#fffaf8', '#f6e6e3'], body: ['#f7e8e4', '#dfc7c2'], back: ['#e8608f', '#8e1f4b'], pal: 'light', accent: '#ff5fa2', bg: ['#2a0c20', '#64184a', '#ff86b8', '#ffd166'] },
-    { id: 'lagoon', name: 'Lagoon', stars: 30, face: ['#fbfdff', '#e3edf2'], body: ['#eef4f7', '#c9d7de'], back: ['#1aa3c8', '#0a4a6e'], pal: 'light', accent: '#38d6ff', bg: ['#061a30', '#0c4775', '#47cdff', '#7cffcb'] },
-    { id: 'ember', name: 'Ember', stars: 60, face: ['#fffaf0', '#f3e2c6'], body: ['#f6e6c8', '#dcc39b'], back: ['#e5741f', '#8a2f07'], pal: 'light', accent: '#ff8a3d', bg: ['#260f05', '#71290b', '#ffa24a', '#ffe066'] },
-    { id: 'royal', name: 'Royal', stars: 100, face: ['#fffcf6', '#eee6da'], body: ['#f2ebe0', '#d6cbbb'], back: ['#7b48d6', '#341670'], pal: 'light', accent: '#c59bff', bg: ['#140a30', '#381c7a', '#b388ff', '#ff86b8'] },
-    { id: 'obsidian', name: 'Obsidian', stars: 160, face: ['#3a3f52', '#1c1f2b'], body: ['#2d3142', '#171923'], back: ['#c9a24a', '#6e5218'], pal: 'dark', accent: '#e8c46a', bg: ['#06070e', '#191d3a', '#6c7cff', '#e8c46a'] }
+    { id: 'jade', name: 'Maple', stars: 0, face: ['#efd6a6', '#dcb57d'], grain: '#a26b33', body: ['#c99a62', '#9c6f3e'], back: ['#2f7d5b', '#123d2c'], pal: 'light', accent: '#ffc94a', bg: ['#0b2621', '#145244', '#2bc293', '#ffc94a'] },
+    { id: 'sakura', name: 'Cherry', stars: 12, face: ['#e7b28f', '#cd8a66'], grain: '#86432a', body: ['#b36f4c', '#7f4529'], back: ['#b8325e', '#5e1030'], pal: 'light', accent: '#ff5fa2', bg: ['#2a0c20', '#64184a', '#ff86b8', '#ffd166'] },
+    { id: 'lagoon', name: 'Birch', stars: 30, face: ['#f4e7cc', '#e2cda7'], grain: '#b0915f', body: ['#d4b98c', '#a98c5e'], back: ['#1b7fa3', '#0a3d58'], pal: 'light', accent: '#38d6ff', bg: ['#061a30', '#0c4775', '#47cdff', '#7cffcb'] },
+    { id: 'ember', name: 'Teak', stars: 60, face: ['#dca46a', '#be8048'], grain: '#6f4019', body: ['#a8692f', '#74431a'], back: ['#c25a1a', '#5e2405'], pal: 'light', accent: '#ff8a3d', bg: ['#260f05', '#71290b', '#ffa24a', '#ffe066'] },
+    { id: 'royal', name: 'Rosewood', stars: 100, face: ['#a9614a', '#874434'], grain: '#4a1d14', body: ['#7a3a2a', '#4f2117'], back: ['#5b2fa0', '#25104c'], pal: 'dark', accent: '#c59bff', bg: ['#140a30', '#381c7a', '#b388ff', '#ff86b8'] },
+    { id: 'obsidian', name: 'Ebony', stars: 160, face: ['#43352e', '#261c18'], grain: '#0c0806', body: ['#2e231e', '#16100d'], back: ['#c9a24a', '#6e5218'], pal: 'dark', accent: '#e8c46a', bg: ['#06070e', '#191d3a', '#6c7cff', '#e8c46a'] }
   ];
 
-  // Traditional enamel paint colors; the dark set uses metal inlays.
+  // Traditional enamel paint for light woods; ivory and metal inlay for dark woods.
   var PALETTES = {
-    light: { blue: '#1c3f94', green: '#0d6b45', red: '#b81d2c', ink: '#15171f', gold: '#a87a22', teal: '#11706f' },
-    dark: { blue: '#9cbcff', green: '#7fe0ae', red: '#ff8a8a', ink: '#efe2c0', gold: '#e8c46a', teal: '#7fe3dc' }
+    light: { blue: '#1c3a86', green: '#0b5e3c', red: '#a8141f', ink: '#16110c', gold: '#8a5d14', teal: '#0d625f' },
+    dark: { blue: '#a9c4ff', green: '#93e2b5', red: '#ff9a8a', ink: '#f6e9c8', gold: '#f0cd78', teal: '#8fe8e0' }
   };
 
   function hex(h) { var v = parseInt(h.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; }

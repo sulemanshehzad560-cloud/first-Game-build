@@ -1,12 +1,14 @@
 /* Canvas renderer for a layered Mahjong board.
-   Tiles are pre-rendered sprites: a soft cast shadow, a two-layer body (bone + dyed back)
-   with a beveled, grained face, and symbols carved into that face. Matches play a
+   Seen from above: each tile is a carved wooden block with only a thin front edge showing,
+   and stacked layers sit slightly higher. Tiles are pre-rendered sprites: a soft cast shadow,
+   a varnished wood body with grain, and symbols carved and painted into the top. Matches play a
    "slam": both tiles lift, rush together, collide with a hit-stop, then fuse and vanish. */
 (function (global) {
   'use strict';
   var T = global.MahjongTiles;
   var reducedMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var DEPTH = 0.3;  // tile thickness as a fraction of half-tile width
+  var DEPTH = 0.2;  // visible edge (and per-layer rise) as a fraction of half-tile width
+  var VARIANTS = 6; // distinct grain patterns per tile set
   var ASPECT = 1.3; // tile height / width
   var M = 3;        // sprite margin in CSS px
 
@@ -74,10 +76,10 @@
     this.c.height = this.stat.height = Math.max(1, Math.round(rect.height * dpr));
     if (this.lay) {
       var L = this.lay, spanX = L.maxX - L.minX, spanY = L.maxY - L.minY, layers = L.maxZ + 1;
-      var u = Math.min(rect.width / (spanX + layers * DEPTH + 0.6), rect.height / (spanY * ASPECT + layers * DEPTH + 0.6));
+      var u = Math.min(rect.width / (spanX + 0.5), rect.height / (spanY * ASPECT + (layers + 1) * DEPTH + 0.5));
       this.ux = u; this.uy = u * ASPECT; this.dz = u * DEPTH;
       this.fw = 2 * u; this.fh = 2 * this.uy;
-      var bw = spanX * u + layers * this.dz, bh = spanY * this.uy + layers * this.dz;
+      var bw = spanX * u, bh = spanY * this.uy + (layers + 1) * this.dz;
       this.ox = (rect.width - bw) / 2; this.oy = (rect.height - bh) / 2;
     }
     this.sprites.clear();
@@ -87,7 +89,7 @@
   TileBoard.prototype.rect = function (i) {
     var L = this.lay;
     return {
-      x: this.ox + this.dz + (L.x[i] - L.minX) * this.ux + L.z[i] * this.dz,
+      x: this.ox + (L.x[i] - L.minX) * this.ux,
       y: this.oy + (L.maxZ - L.z[i]) * this.dz + (L.y[i] - L.minY) * this.uy,
       w: this.fw, h: this.fh
     };
@@ -100,7 +102,7 @@
       var i = o[k];
       if (!this.present[i]) continue;
       var r = this.rect(i);
-      if (px >= r.x - this.dz && px <= r.x + r.w && py >= r.y && py <= r.y + r.h + this.dz) return i;
+      if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h + this.dz) return i;
     }
     return -1;
   };
@@ -108,59 +110,83 @@
   TileBoard.prototype.isFree = function (i) { return global.Mahjong.isFree(this.lay, this.present, i); };
 
   // ---------------------------------------------------------------- sprites
-  TileBoard.prototype.base = function () {
-    if (this.sprites.has('base')) return this.sprites.get('base');
-    var th = this.theme, S = this.dpr, fw = this.fw, fh = this.fh, d = this.dz, rad = fw * 0.12;
-    var W = fw + d + M * 2, H = fh + d + M * 2, c = canvas(W * S, H * S), g = c.getContext('2d');
-    g.scale(S, S);
-    var fx = M + d, fy = M;
-    // Body: stack thin slices from the back layer up to the face.
-    var step = Math.max(0.35, d / 40);
-    for (var k = d; k >= 0; k -= step) {
-      var t = k / d;
-      g.fillStyle = t > 0.42 ? T.mix(th.back[0], th.back[1], (t - 0.42) / 0.58) : T.mix(th.body[0], th.body[1], t / 0.42);
-      rr(g, fx - k, fy + k, fw, fh, rad); g.fill();
+  function woodGrain(g, x, y, w, h, th, seed) {
+    var rand = global.Mahjong.mulberry32(seed), k;
+    var base = g.createLinearGradient(x, y, x + w, y + h);
+    base.addColorStop(0, th.face[0]); base.addColorStop(1, th.face[1]);
+    g.fillStyle = base; g.fillRect(x, y, w, h);
+    // Long grain lines run down the tile, bending around an occasional knot.
+    var knot = rand() < 0.35 ? { x: x + w * (0.2 + rand() * 0.6), y: y + h * (0.2 + rand() * 0.6), r: w * (0.06 + rand() * 0.08) } : null;
+    var lines = 26, phase = rand() * 10, freq = 0.8 + rand() * 1.2;
+    for (k = 0; k < lines; k++) {
+      var lx = x - w * 0.1 + (k / lines) * w * 1.2 + (rand() - 0.5) * w * 0.03;
+      g.beginPath();
+      for (var t = 0; t <= 1.0001; t += 0.05) {
+        var yy = y + t * h, xx = lx + Math.sin(t * freq * 3 + phase + k * 0.15) * w * 0.035;
+        if (knot) { var dy = yy - knot.y, dx = xx - knot.x, dist = Math.hypot(dx, dy) + 0.001, push = Math.max(0, knot.r * 2.2 - dist) * 0.6; xx += dx / dist * push; }
+        if (t === 0) g.moveTo(xx, yy); else g.lineTo(xx, yy);
+      }
+      g.strokeStyle = hexA(th.grain, k % 3 === 0 ? 0.32 : 0.14 + rand() * 0.1);
+      g.lineWidth = (k % 3 === 0 ? 1.1 : 0.6) * Math.max(1, w / 50);
+      g.stroke();
     }
-    // Light from the top-left: the bottom side falls into shade.
+    if (knot) {
+      for (k = 4; k >= 1; k--) {
+        g.beginPath(); g.ellipse(knot.x, knot.y, knot.r * k * 0.45, knot.r * k * 0.7, 0, 0, 6.283);
+        g.strokeStyle = hexA(th.grain, 0.18 + 0.1 * (4 - k)); g.lineWidth = Math.max(0.6, w / 70); g.stroke();
+      }
+      g.fillStyle = hexA(th.grain, 0.45); g.beginPath(); g.ellipse(knot.x, knot.y, knot.r * 0.3, knot.r * 0.45, 0, 0, 6.283); g.fill();
+    }
+    // Fine pores.
+    g.globalAlpha = 0.07; g.fillStyle = grainPattern(g); g.fillRect(x, y, w, h); g.globalAlpha = 1;
+  }
+
+  TileBoard.prototype.base = function (variant) {
+    variant = (variant || 0) % VARIANTS;
+    var key = 'base' + variant;
+    if (this.sprites.has(key)) return this.sprites.get(key);
+    var th = this.theme, S = this.dpr, fw = this.fw, fh = this.fh, d = this.dz, rad = fw * 0.13;
+    var W = fw + M * 2, H = fh + d + M * 2, c = canvas(W * S, H * S), g = c.getContext('2d');
+    g.scale(S, S);
+    var fx = M, fy = M, k;
+    // Front edge: the wood body, then a strip of the dyed back layer at the very bottom.
+    var step = Math.max(0.35, d / 30);
+    for (k = d; k >= 0; k -= step) {
+      var t = k / d;
+      g.fillStyle = t > 0.6 ? T.mix(th.back[0], th.back[1], (t - 0.6) / 0.4) : T.mix(th.body[0], th.body[1], t / 0.6);
+      rr(g, fx, fy + k, fw, fh, rad); g.fill();
+    }
     g.save(); g.globalCompositeOperation = 'source-atop';
-    var shade = g.createLinearGradient(0, fy + fh * 0.6, 0, fy + fh + d);
+    var shade = g.createLinearGradient(0, fy + fh - rad, 0, fy + fh + d);
     shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,0.35)');
     g.fillStyle = shade; g.fillRect(0, 0, W, H);
-    var seam = g.createLinearGradient(fx - d, 0, fx, 0);
-    seam.addColorStop(0, 'rgba(255,255,255,0.12)'); seam.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = seam; g.fillRect(0, 0, fx, H);
     g.restore();
-    // Face.
-    rr(g, fx, fy, fw, fh, rad);
-    var face = g.createLinearGradient(fx, fy, fx + fw, fy + fh);
-    face.addColorStop(0, th.face[0]); face.addColorStop(1, th.face[1]);
-    g.fillStyle = face; g.fill();
-    g.save(); g.clip();
-    g.globalAlpha = th.pal === 'dark' ? 0.08 : 0.06; g.fillStyle = grainPattern(g); g.fillRect(fx, fy, fw, fh);
-    g.globalAlpha = 1;
-    // Bevel ring: bright on the lit top-left edge, dark on the bottom-right.
-    var b = fw * 0.06;
+    // Top surface: wood grain under a satin varnish.
+    g.save();
+    rr(g, fx, fy, fw, fh, rad); g.clip();
+    woodGrain(g, fx, fy, fw, fh, th, 9173 + variant * 7919);
+    var b = fw * 0.07;
+    // Rounded (routed) edge: light catches the top rim, the lower rim rolls into shade.
     g.beginPath();
     rr(g, fx, fy, fw, fh, rad);
-    g.moveTo(fx + b + rad * 0.7, fy + b);
-    g.arcTo(fx + b, fy + b, fx + b, fy + fh - b, rad * 0.7); g.arcTo(fx + b, fy + fh - b, fx + fw - b, fy + fh - b, rad * 0.7);
-    g.arcTo(fx + fw - b, fy + fh - b, fx + fw - b, fy + b, rad * 0.7); g.arcTo(fx + fw - b, fy + b, fx + b, fy + b, rad * 0.7); g.closePath();
-    var bev = g.createLinearGradient(fx, fy, fx + fw, fy + fh);
-    bev.addColorStop(0, 'rgba(255,255,255,0.85)'); bev.addColorStop(0.45, 'rgba(255,255,255,0.1)'); bev.addColorStop(1, 'rgba(60,40,20,0.28)');
+    g.moveTo(fx + b + rad * 0.6, fy + b);
+    g.arcTo(fx + b, fy + b, fx + b, fy + fh - b, rad * 0.6); g.arcTo(fx + b, fy + fh - b, fx + fw - b, fy + fh - b, rad * 0.6);
+    g.arcTo(fx + fw - b, fy + fh - b, fx + fw - b, fy + b, rad * 0.6); g.arcTo(fx + fw - b, fy + b, fx + b, fy + b, rad * 0.6); g.closePath();
+    var bev = g.createLinearGradient(0, fy, 0, fy + fh);
+    bev.addColorStop(0, 'rgba(255,245,220,0.55)'); bev.addColorStop(0.5, 'rgba(255,245,220,0.08)'); bev.addColorStop(1, 'rgba(40,20,5,0.35)');
     g.fillStyle = bev; g.fill('evenodd');
-    // Soft sheen and a crisp specular glint near the top edge.
-    var sheen = g.createRadialGradient(fx + fw * 0.25, fy + fh * 0.18, 0, fx + fw * 0.25, fy + fh * 0.18, fw * 0.9);
-    sheen.addColorStop(0, 'rgba(255,255,255,0.32)'); sheen.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = sheen; g.fillRect(fx, fy, fw, fh);
-    var glint = g.createLinearGradient(0, fy + b * 0.3, 0, fy + b * 2.2);
-    glint.addColorStop(0, 'rgba(255,255,255,0.7)'); glint.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = glint; g.fillRect(fx + rad, fy + b * 0.3, fw - rad * 2, b * 1.9);
+    var varnish = g.createRadialGradient(fx + fw * 0.35, fy + fh * 0.2, 0, fx + fw * 0.35, fy + fh * 0.2, fh * 0.8);
+    varnish.addColorStop(0, 'rgba(255,250,235,0.28)'); varnish.addColorStop(1, 'rgba(255,250,235,0)');
+    g.fillStyle = varnish; g.fillRect(fx, fy, fw, fh);
+    var glint = g.createLinearGradient(0, fy + b * 0.2, 0, fy + b * 1.6);
+    glint.addColorStop(0, 'rgba(255,255,255,0.55)'); glint.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = glint; g.fillRect(fx + rad, fy + b * 0.2, fw - rad * 2, b * 1.4);
     g.restore();
     rr(g, fx + 0.5, fy + 0.5, fw - 1, fh - 1, rad);
-    g.strokeStyle = th.pal === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(90,70,40,0.28)'; g.lineWidth = 1; g.stroke();
-    var s = { c: c, w: W, h: H, dim: tint(c, 'rgba(8,12,22,0.4)') };
-    this.sprites.set('base', s);
-    return s;
+    g.strokeStyle = 'rgba(40,20,5,0.4)'; g.lineWidth = 1; g.stroke();
+    var spr = { c: c, w: W, h: H, dim: tint(c, 'rgba(8,12,22,0.42)') };
+    this.sprites.set(key, spr);
+    return spr;
   };
 
   TileBoard.prototype.shadow = function () {
@@ -187,12 +213,13 @@
     enamel.addColorStop(0, 'rgba(255,255,255,0.22)'); enamel.addColorStop(0.5, 'rgba(255,255,255,0)'); enamel.addColorStop(1, 'rgba(0,0,0,0.15)');
     pg.fillStyle = enamel; pg.fillRect(0, 0, w, h);
     var out = canvas(paint.width, paint.height), og = out.getContext('2d'), o = Math.max(0.6, this.fw * 0.014) * S;
-    og.globalAlpha = dark ? 0.35 : 0.95; og.drawImage(tint(paint, '#ffffff'), o, o);
-    og.globalAlpha = dark ? 0.6 : 0.3; og.drawImage(tint(paint, '#000000'), -o * 0.6, -o * 0.6);
+    // Carved into wood: a lit lip below the cut, a dark burned edge above it, then the paint.
+    og.globalAlpha = dark ? 0.3 : 0.55; og.drawImage(tint(paint, '#fff3d6'), 0, o);
+    og.globalAlpha = dark ? 0.7 : 0.5; og.drawImage(tint(paint, '#2a1406'), 0, -o * 0.8);
     og.globalAlpha = 1; og.drawImage(paint, 0, 0);
-    var rim = tint(paint, '#000000'), rg = rim.getContext('2d');
-    rg.globalCompositeOperation = 'destination-out'; rg.drawImage(paint, o * 1.2, o * 1.2);
-    og.globalAlpha = 0.45; og.drawImage(rim, 0, 0);
+    var rim = tint(paint, '#1a0c03'), rg = rim.getContext('2d');
+    rg.globalCompositeOperation = 'destination-out'; rg.drawImage(paint, 0, o * 1.3);
+    og.globalAlpha = 0.55; og.drawImage(rim, 0, 0);
     var s = { c: out, pad: pad, w: w, h: h };
     this.sprites.set(kind, s);
     return s;
@@ -206,7 +233,7 @@
     g.globalAlpha = (o && o.alpha != null ? o.alpha : 1) * Math.max(0.35, 0.8 - lift / (this.fw * 1.5));
     var grow = 1 + lift / this.fw * 0.25;
     var w = sh.w * sc * grow, h = sh.h * sc * grow;
-    var cx = r.x + r.w / 2 - d * 1.2 - lift * 0.15, cy = r.y + r.h / 2 + d * 1.4 + lift * 0.35;
+    var cx = r.x + r.w / 2, cy = r.y + r.h / 2 + d * 1.6 + lift * 0.5;
     g.drawImage(sh.c, cx - w / 2, cy - h / 2, w, h);
     g.restore();
   };
@@ -215,15 +242,15 @@
   TileBoard.prototype.drawTile = function (g, r, kind, o) {
     o = o || {};
     if (!o.noShadow) this.drawShadow(g, r, o);
-    var base = this.base(), sc = r.w / this.fw, lift = o.lift || 0, d = this.dz * sc;
-    var x = r.x + lift * 0.5, y = r.y - lift, rad = r.w * 0.12;
+    var base = this.base(o.variant), sc = r.w / this.fw, lift = o.lift || 0;
+    var x = r.x, y = r.y - lift, rad = r.w * 0.13;
     g.save();
     if (o.alpha != null) g.globalAlpha = o.alpha;
     var cx = x + r.w / 2, cy = y + r.h / 2;
     if (o.rot) { g.translate(cx, cy); g.rotate(o.rot); g.translate(-cx, -cy); }
     if (o.scaleX != null && o.scaleX !== 1) { g.translate(cx, 0); g.scale(Math.max(0.02, o.scaleX), 1); g.translate(-cx, 0); }
     if (o.glow) { g.shadowColor = o.glow; g.shadowBlur = r.w * 0.45; }
-    var bx = x - d - M * sc, by = y - M * sc;
+    var bx = x - M * sc, by = y - M * sc;
     g.drawImage(base.c, bx, by, base.w * sc, base.h * sc);
     g.shadowBlur = 0; g.shadowColor = 'transparent';
     var f = this.face(kind);
@@ -253,7 +280,7 @@
       i = L.order[k];
       if (!this.present[i] || (skip && skip[i])) continue;
       if (L.z[i] !== z) { flush(this); z = L.z[i]; }
-      var r = this.rect(i), o = { state: free && !free[i] ? 'blocked' : '' }, kind = this.kinds[i];
+      var r = this.rect(i), o = { state: free && !free[i] ? 'blocked' : '', variant: i }, kind = this.kinds[i];
       if (e) {
         var t = clamp01((now - e.t0 - e.delays[i]) / 420);
         if (t <= 0) continue;
@@ -305,7 +332,7 @@
     var u = cb[0] >= ca[0] ? [1, 0] : [-1, 0], ext = this.fw / 2;
     var mx = (ca[0] + cb[0]) / 2, my = (ca[1] + cb[1]) / 2 - this.fh * 0.2;
     this.fx.push({
-      ka: this.kinds[a], kb: this.kinds[b], ca: ca, cb: cb, u: u, m: [mx, my], ext: ext,
+      ka: this.kinds[a], kb: this.kinds[b], va: a, vb: b, ca: ca, cb: cb, u: u, m: [mx, my], ext: ext,
       t0: performance.now(), color: color || this.accent, power: power || 1, onImpact: onImpact, hit: false
     });
     if (this.hover === a || this.hover === b) this.hover = -1;
@@ -327,7 +354,7 @@
       var vy = (perp[1] * side + u[1] * spread) * (0.25 + Math.random() * 0.55) * fw / 40 - 0.1;
       this.particles.push({ kind: 'spark', x: x, y: y, vx: vx, vy: vy, t0: now, life: 280 + Math.random() * 320, color: k % 3 ? '#fff4c2' : e.color, g: 0.0009 });
     }
-    var chipCols = [th.face[0], th.face[1], th.back[0], th.back[1]];
+    var chipCols = [th.face[0], th.face[1], th.body[0], th.body[1]];
     for (k = 0; k < 12; k++) {
       var ang = Math.random() * 6.283, sp = (0.1 + Math.random() * 0.3) * fw / 40;
       this.particles.push({ kind: 'chip', x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 0.25 * fw / 40, t0: now, life: 650 + Math.random() * 350, color: chipCols[k % 4], size: fw * (0.05 + Math.random() * 0.07), rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.03, g: 0.0016 });
@@ -357,9 +384,9 @@
       [0.18, 0.36].forEach(function (lag, n) {
         var rl = easeInCubic(Math.max(0, (t - RISE) / RUSH - lag));
         var w = fw * scale, h = fh * scale;
-        [[sa, ta, e.ka], [sb, tb, e.kb]].forEach(function (s) {
+        [[sa, ta, e.ka, e.va], [sb, tb, e.kb, e.vb]].forEach(function (s) {
           var px = s[0][0] + (s[1][0] - s[0][0]) * rl, py = s[0][1] + (s[1][1] - s[0][1]) * rl;
-          self.drawTile(g, { x: px - w / 2, y: py - h / 2, w: w, h: h }, s[2], { lift: lift, alpha: 0.22 / (n + 1), noShadow: true });
+          self.drawTile(g, { x: px - w / 2, y: py - h / 2, w: w, h: h }, s[2], { lift: lift, alpha: 0.22 / (n + 1), noShadow: true, variant: s[3] });
         });
       });
     } else {
@@ -378,9 +405,9 @@
     var w = fw * scale, h = fh * scale;
     if (w < 1) return;
     var sx = 1 - (1 - squash) * Math.abs(u[0]), sy = 1 - (1 - squash) * Math.abs(u[1]);
-    [[pa, e.ka, -1], [pb, e.kb, 1]].forEach(function (s) {
+    [[pa, e.ka, -1, e.va], [pb, e.kb, 1, e.vb]].forEach(function (s) {
       var ww = w * sx, hh = h * sy;
-      self.drawTile(g, { x: s[0][0] - ww / 2, y: s[0][1] - hh / 2, w: ww, h: hh }, s[1], { lift: lift, rot: rot * s[2], white: white, alpha: alpha, glow: hexA(e.color, 0.85) });
+      self.drawTile(g, { x: s[0][0] - ww / 2, y: s[0][1] - hh / 2, w: ww, h: hh }, s[1], { lift: lift, rot: rot * s[2], white: white, alpha: alpha, glow: hexA(e.color, 0.85), variant: s[3] });
     });
   };
 
@@ -409,10 +436,10 @@
         rr(g, r.x - 2, r.y - 2, r.w + 4, r.h + 4, rad + 2);
         g.strokeStyle = hexA(this.accent, 0.35 + pulse * 0.45); g.lineWidth = 2.5; g.stroke();
       }
-      if (this.hover >= 0 && this.present[this.hover]) this.drawTile(g, this.rect(this.hover), this.kinds[this.hover], { state: 'hover', lift: this.dz * 0.7 });
+      if (this.hover >= 0 && this.present[this.hover]) this.drawTile(g, this.rect(this.hover), this.kinds[this.hover], { state: 'hover', lift: this.dz * 0.9, variant: this.hover });
       if (this.sel >= 0 && this.present[this.sel]) {
         var bob = reducedMotion ? 0 : Math.sin(now / 220) * this.dz * 0.3;
-        this.drawTile(g, this.rect(this.sel), this.kinds[this.sel], { state: 'selected', lift: this.dz * 1.3 + bob, glow: hexA(this.accent, 0.7) });
+        this.drawTile(g, this.rect(this.sel), this.kinds[this.sel], { state: 'selected', lift: this.dz * 1.8 + bob, glow: hexA(this.accent, 0.7), variant: this.sel });
       }
     }
     if (this.hint.length && now < this.hintUntil) {
