@@ -144,9 +144,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            export DEBUG_APK=$(ls dist/*-debug.apk) && node ci/android-e2e.mjs
-            export RELEASE_AAB=$(ls dist/*.aab) && bash ci/release-smoke.sh
+          script: bash ci/emulator-run.sh
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -171,9 +169,8 @@ jobs:
           name: emulator-results
           path: e2e
 
-      - name: Create release
+      - name: Release notes
         env:
-          GH_TOKEN: ${{ github.token }}
           CODE: ${{ needs.build.outputs.code }}
           TESTS: ${{ needs.emulator.result }}
         run: |
@@ -187,6 +184,28 @@ jobs:
             echo
             echo "Emulator tests: ${TESTS}"
             if [ -f e2e/report.txt ]; then echo; echo '```'; cat e2e/report.txt; echo '```'; fi
-          } > notes.md
+          } > dist/RELEASE-NOTES.md
+          cat dist/RELEASE-NOTES.md
+
+      # Build outputs also go to the ci-builds branch (one commit, replaced every build),
+      # which works even where creating releases is not allowed.
+      - name: Publish to ci-builds branch
+        env:
+          CODE: ${{ needs.build.outputs.code }}
+        run: |
+          cd dist
+          git init -q -b ci-builds
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Jade Rush ${VERSION_NAME} build ${CODE} (${GITHUB_SHA::7})"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" ci-builds
+
+      - name: Create GitHub release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ needs.build.outputs.code }}
+        run: |
           gh release create "build-${CODE}" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Jade Rush ${VERSION_NAME} (build ${CODE})" --notes-file notes.md --prerelease
+            --title "Jade Rush ${VERSION_NAME} (build ${CODE})" --notes-file dist/RELEASE-NOTES.md --prerelease
