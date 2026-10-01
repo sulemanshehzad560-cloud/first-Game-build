@@ -37,6 +37,8 @@ The game ships as an Android app built with [Capacitor](https://capacitorjs.com/
 
 * **Builds:** every push runs `.github/workflows/android.yml`. It runs the engine tests and Android lint, builds the debug APK and the release bundle (AAB), tests both on an Android 14 emulator, and attaches everything to a GitHub release. The emulator test drives the game with Playwright: it clears a level, checks pause, a duel, the back button and the logs.
 * **Ads:** Google AdMob interstitials between boards (`js/ads.js`), with the consent form and an "Ad privacy choices" entry in Settings. Debug builds only request Google's test ads.
+* **Facebook friends:** optional Facebook Login shows which friends play, who is online, and sends duel invites peer to peer (`js/social.js`). It switches on when the build has a Facebook App ID; see [`docs/FACEBOOK_SETUP.md`](docs/FACEBOOK_SETUP.md).
+* **Device reach:** Android 7.0+ (about 99% of active devices), phones, tablets and Chromebooks, a battery saver mode for low-end phones, and an update prompt for outdated WebViews.
 * **Signing:** the release bundle is signed with an upload key that is never committed. Add it as repository secrets to sign in CI (see `docs/PLAY_STORE_GUIDE.md`).
 * **Local build:** `npm ci && npm run android:sync`, then open `android/` in Android Studio or run `./gradlew bundleRelease`.
 * **Store assets:** `store/` (icon, feature graphic, phone screenshots), regenerated with `npm run assets`.
@@ -53,6 +55,7 @@ The game ships as an Android app built with [Capacitor](https://capacitorjs.com/
 | `js/net.js` | PeerJS room hosting and joining. |
 | `js/native.js` | Android integration: back button, status bar, pause on background, build type. |
 | `js/ads.js` | AdMob interstitials and consent (no-op on the web). |
+| `js/social.js` | Facebook sign-in, profile and friends list (Android app only). |
 | `js/audio.js` | WebAudio tile clacks and combo chimes. |
 
 ## Tests

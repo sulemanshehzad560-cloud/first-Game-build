@@ -70,7 +70,7 @@
   TileBoard.prototype.setTheme = function (theme) { this.theme = theme; this.accent = theme.accent; this.sprites.clear(); this.dirty = true; };
 
   TileBoard.prototype.resize = function () {
-    var rect = this.c.getBoundingClientRect(), dpr = Math.min(global.devicePixelRatio || 1, 2.5);
+    var rect = this.c.getBoundingClientRect(), dpr = Math.min(global.devicePixelRatio || 1, global.JadeLite ? 1.5 : 2.5);
     this.dpr = dpr; this.W = rect.width; this.H = rect.height;
     this.c.width = this.stat.width = Math.max(1, Math.round(rect.width * dpr));
     this.c.height = this.stat.height = Math.max(1, Math.round(rect.height * dpr));
@@ -348,18 +348,19 @@
     this.rings.push({ x: x, y: y, t0: now, color: '#ffffff', w: 1.2 });
     this.rings.push({ x: x, y: y, t0: now + 60, color: e.color, w: 0.9 });
     var perp = [-u[1], u[0]];
-    for (var k = 0; k < 26 + p * 8; k++) {
+    var lite = global.JadeLite ? 0.4 : 1;
+    for (var k = 0; k < (26 + p * 8) * lite; k++) {
       var side = k % 2 ? 1 : -1, spread = (Math.random() - 0.5) * 1.4;
       var vx = (perp[0] * side + u[0] * spread) * (0.25 + Math.random() * 0.55) * fw / 40;
       var vy = (perp[1] * side + u[1] * spread) * (0.25 + Math.random() * 0.55) * fw / 40 - 0.1;
       this.particles.push({ kind: 'spark', x: x, y: y, vx: vx, vy: vy, t0: now, life: 280 + Math.random() * 320, color: k % 3 ? '#fff4c2' : e.color, g: 0.0009 });
     }
     var chipCols = [th.face[0], th.face[1], th.body[0], th.body[1]];
-    for (k = 0; k < 12; k++) {
+    for (k = 0; k < 12 * lite; k++) {
       var ang = Math.random() * 6.283, sp = (0.1 + Math.random() * 0.3) * fw / 40;
       this.particles.push({ kind: 'chip', x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 0.25 * fw / 40, t0: now, life: 650 + Math.random() * 350, color: chipCols[k % 4], size: fw * (0.05 + Math.random() * 0.07), rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.03, g: 0.0016 });
     }
-    for (k = 0; k < 7; k++) {
+    for (k = 0; k < (lite < 1 ? 0 : 7); k++) {
       var a2 = Math.random() * 6.283;
       this.particles.push({ kind: 'dust', x: x + Math.cos(a2) * fw * 0.2, y: y + Math.sin(a2) * fw * 0.2, vx: Math.cos(a2) * 0.03, vy: Math.sin(a2) * 0.03 - 0.02, t0: now, life: 600 + Math.random() * 300, color: th.face[1], size: fw * (0.25 + Math.random() * 0.2), g: 0 });
     }

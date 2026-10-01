@@ -6,17 +6,18 @@
   function plugin(name) { try { return isNative ? Cap.registerPlugin(name) : null; } catch (e) { return null; } }
 
   var App = plugin('App'), StatusBar = plugin('StatusBar'), BuildInfo = plugin('BuildInfo');
-  var debugBuild = null;
+  var info = null;
 
   global.NativeShell = {
     isNative: isNative,
-    /** Resolves true for debug builds (test ads), false for release builds. */
-    isDebug: function () {
-      if (!isNative) return Promise.resolve(true);
-      if (debugBuild !== null) return Promise.resolve(debugBuild);
-      if (!BuildInfo) return Promise.resolve(false);
-      return BuildInfo.isDebug().then(function (r) { debugBuild = !!(r && r.debug); return debugBuild; }, function () { debugBuild = false; return false; });
+    /** Build facts from the native side: { debug, facebook }. */
+    buildInfo: function () {
+      if (!isNative || !BuildInfo) return Promise.resolve({ debug: !isNative, facebook: false });
+      if (!info) info = BuildInfo.isDebug().then(function (r) { return { debug: !!(r && r.debug), facebook: !!(r && r.facebook) }; }, function () { return { debug: false, facebook: false }; });
+      return info;
     },
+    /** Resolves true for debug builds (test ads), false for release builds. */
+    isDebug: function () { return this.buildInfo().then(function (i) { return i.debug; }); },
     versionName: function () {
       if (!App) return Promise.resolve('web');
       return App.getInfo().then(function (i) { return i.version + ' (' + i.build + ')'; }, function () { return ''; });

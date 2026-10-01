@@ -9,3 +9,4 @@ android/app/release/
 *.jks
 *.keystore
 android/keystore.properties
+!android/app/debug.keystore

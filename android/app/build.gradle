@@ -8,6 +8,14 @@ if (keystoreFile.exists()) keystoreFile.withInputStream { keystoreProps.load(it)
 def signingValue = { String key, String env -> System.getenv(env) ?: keystoreProps.getProperty(key) }
 def releaseStore = signingValue('storeFile', 'JADE_KEYSTORE_FILE')
 
+// Facebook Login: set FB_APP_ID / FB_CLIENT_TOKEN (GitHub repository variables) or
+// jade.facebookAppId / jade.facebookClientToken in android/gradle.properties.
+// Without them the SDK gets a placeholder and the Friends feature stays hidden.
+def fbAppId = (System.getenv('FB_APP_ID') ?: (project.findProperty('jade.facebookAppId') ?: '')).toString().trim()
+def fbClientToken = (System.getenv('FB_CLIENT_TOKEN') ?: (project.findProperty('jade.facebookClientToken') ?: '')).toString().trim()
+def fbEnabled = !fbAppId.isEmpty() && !fbClientToken.isEmpty()
+if (!fbEnabled) { fbAppId = '100000000000000'; fbClientToken = 'not-configured' }
+
 android {
     namespace = "com.sulemanshehzad.jaderush"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -17,6 +25,10 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(System.getenv('JADE_VERSION_CODE') ?: '1')
         versionName "1.0.0"
+        resValue "string", "facebook_app_id", fbAppId
+        resValue "string", "facebook_client_token", fbClientToken
+        resValue "string", "fb_login_protocol_scheme", "fb" + fbAppId
+        buildConfigField "boolean", "FACEBOOK_ENABLED", fbEnabled.toString()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -28,6 +40,13 @@ android {
         buildConfig = true
     }
     signingConfigs {
+        // Shared debug key so Facebook key hashes stay the same on every CI build.
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
         release {
             if (releaseStore) {
                 storeFile file(releaseStore)
@@ -44,6 +63,9 @@ android {
         xmlReport = true
     }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             if (releaseStore) signingConfig signingConfigs.release
             minifyEnabled false

@@ -15,7 +15,8 @@ Everything Play Console asks for, in the order it asks. Copy-paste the text bloc
 | Category | Board (alternative: Puzzle) |
 | Tags | Mahjong, Tile matching, Board, Puzzle, Brain games |
 | Contains ads | Yes (Google AdMob interstitials) |
-| Min / target Android | Android 7.0 (API 24) / Android 16 (API 36) |
+| Min / target Android | Android 7.0 (API 24) / Android 16 (API 36): about 99% of active Android devices |
+| Devices | Phones, tablets, foldables and Chromebooks (touchscreen not required); battery saver mode for low-end phones |
 
 ## 2. Store listing
 
@@ -101,6 +102,17 @@ The same link is in the app under Settings → Privacy policy.
 | App info and performance → Crash logs, Diagnostics | Collected and shared; Analytics, Fraud prevention |
 
 Online duels connect players directly (peer to peer) and only exchange game moves; nothing is stored, so it is not declared as collection.
+
+When Facebook Login is switched on (see `docs/FACEBOOK_SETUP.md`), also declare:
+
+| Data type | Answer |
+| --- | --- |
+| Personal info → Name | Collected (processed on device, not stored by you); App functionality; optional |
+| Personal info → User IDs | Collected and shared (the app-scoped ID is part of the peer-to-peer invite address); App functionality; optional |
+| Photos and videos | No (the profile picture is only displayed, from Facebook's servers) |
+| Social → Other info (friends list) | If Console asks: collected, processed on device only; App functionality; optional |
+
+Also add `public_profile` and `user_friends` to the listing's description of sign-in, and make sure the privacy policy URL is live before you upload a Facebook-enabled build.
 
 ## 4. Closed testing
 

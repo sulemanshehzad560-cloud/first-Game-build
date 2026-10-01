@@ -5,7 +5,8 @@
   "android": {
     "backgroundColor": "#0b2621",
     "allowMixedContent": false,
-    "captureInput": true
+    "captureInput": true,
+    "minWebViewVersion": 84
   },
   "plugins": {
     "SystemBars": {
@@ -17,5 +18,8 @@
       "overlaysWebView": true,
       "backgroundColor": "#00000000"
     }
+  },
+  "server": {
+    "errorPath": "webview-update.html"
   }
 }

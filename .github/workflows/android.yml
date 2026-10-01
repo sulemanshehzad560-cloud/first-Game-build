@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   VERSION_NAME: 1.0.0
@@ -72,6 +72,8 @@ jobs:
         working-directory: android
         env:
           JADE_VERSION_CODE: ${{ steps.meta.outputs.code }}
+          FB_APP_ID: ${{ vars.FB_APP_ID }}
+          FB_CLIENT_TOKEN: ${{ vars.FB_CLIENT_TOKEN }}
           JADE_KEYSTORE_PASSWORD: ${{ secrets.JADE_KEYSTORE_PASSWORD }}
           JADE_KEY_ALIAS: ${{ secrets.JADE_KEY_ALIAS }}
           JADE_KEY_PASSWORD: ${{ secrets.JADE_KEY_PASSWORD }}

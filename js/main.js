@@ -19,6 +19,10 @@
   function fmtTime(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
   A.setEnabled(store.sound);
 
+  // Battery saver: automatic on phones with 2 GB of RAM or less (or 2 cores), or switched on in Settings.
+  function autoLite() { return (navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2); }
+  window.JadeLite = store.lite == null ? !!autoLite() : !!store.lite;
+
   // ------------------------------------------------------------- tile sets, chapters, juice
   var THEMES = window.MahjongTiles.THEMES;
   var CHAPTERS = [
@@ -59,7 +63,7 @@
       drawn = false;
     }
     function frame(now) {
-      if (reduced && drawn) return;
+      if ((reduced || window.JadeLite) && drawn) return;
       drawn = true;
       var base = g.createLinearGradient(0, 0, 0, H);
       base.addColorStop(0, theme.bg[1]); base.addColorStop(1, theme.bg[0]);
@@ -92,6 +96,7 @@
       burst: function (n) {
         if (reduced) return;
         var t = currentTheme(), cols = [t.accent, t.bg[2], t.bg[3], '#ff6fae', '#47cdff', '#ffffff', '#7cffcb'];
+        if (window.JadeLite) n = Math.round(n * 0.4);
         for (var k = 0; k < n; k++) parts.push({ x: innerWidth * (0.2 + Math.random() * 0.6), y: innerHeight * 0.35, vx: (Math.random() - 0.5) * 0.9, vy: -0.4 - Math.random() * 0.7, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.02, w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, c: cols[k % cols.length], life: 2600 + Math.random() * 1200, age: 0 });
       },
       frame: function (dt) {
@@ -139,7 +144,7 @@
   }
 
   // ------------------------------------------------------------- ui helpers
-  var screens = ['home', 'levels', 'lobby', 'game'];
+  var screens = ['home', 'levels', 'lobby', 'friends', 'game'];
   function show(id) {
     screens.forEach(function (s) { $(s).hidden = s !== id; });
     if (id === 'home') refreshHome();
@@ -444,7 +449,7 @@
     G = baseState(gen);
     Object.assign(G, cfg, { duel: 'turns', turn: cfg.first, scores: [0, 0], moveNo: 0, reshuffles: 0, turnEnd: performance.now() + TURN_MS });
     G.names = cfg.mode === 'local' ? ['Jade', 'Ember'] : cfg.mode === 'ai' ? ['You', 'Computer'] : cfg.me === 0 ? ['You', 'Rival'] : ['Rival', 'You'];
-    setTitle(cfg.mode === 'online' ? 'Room ' + Net.code : cfg.mode === 'ai' ? 'Vs computer' : 'Pass & play', cfg.mode === 'ai' ? ['Easy', 'Normal', 'Hard'][cfg.aiLevel] : 'Take turns', null);
+    setTitle(cfg.mode === 'online' ? matchLabel() : cfg.mode === 'ai' ? 'Vs computer' : 'Pass & play', cfg.mode === 'ai' ? ['Easy', 'Normal', 'Hard'][cfg.aiLevel] : 'Take turns', null);
     $('btn-quit').textContent = cfg.mode === 'online' ? '←' : '❚❚'; $('btn-quit').setAttribute('aria-label', cfg.mode === 'online' ? 'Leave match' : 'Pause');
     $('hud-solo').hidden = true; $('hud-duel').hidden = false;
     $('btn-hint').hidden = true; $('btn-shuffle').hidden = true;
@@ -582,6 +587,7 @@
     race: 'Same board for both of you, side by side. First to clear it wins.',
     turns: 'One shared board. Take turns making one match each. Highest score wins.'
   };
+  function matchLabel() { return /^[A-Z0-9]{5}$/.test(Net.code || '') ? 'Room ' + Net.code : 'Vs ' + Net.code; }
   function onlineSupported() { return Net.available() && typeof RTCPeerConnection === 'function'; }
   function setLobbyStatus(msg, isError) { var s = $('lobby-status'); s.textContent = msg; s.classList.toggle('error', !!isError); }
   function syncLobbyChips() {
@@ -597,7 +603,7 @@
 
   function startOnline(m, me) {
     if (m.duel === 'race') {
-      startTimed(M.generateDuel(m.seed, m.size), { mode: 'online', duel: 'race', me: me, size: m.size, title: 'Race · Room ' + Net.code });
+      startTimed(M.generateDuel(m.seed, m.size), { mode: 'online', duel: 'race', me: me, size: m.size, title: matchLabel() });
     } else {
       startTurns({ mode: 'online', size: m.size, seed: m.seed, first: m.first, me: me });
     }
@@ -660,6 +666,178 @@
     else toast(text, 4000);
   }
 
+  // ------------------------------------------------------------- facebook friends
+  var Social = window.Social || null, Presence = Net.presence;
+  var friendsState = { available: false, busy: false, presence: 'offline', error: '' };
+
+  function avatar(url, name) {
+    var el;
+    if (url) { el = document.createElement('img'); el.src = url; el.alt = ''; el.referrerPolicy = 'no-referrer'; }
+    else { el = document.createElement('span'); el.textContent = (name || '?').trim().charAt(0).toUpperCase(); }
+    el.className = 'avatar';
+    return el;
+  }
+
+  function openFriends() {
+    show('friends');
+    renderFriends();
+    if (Social && Social.user) probeFriends();
+  }
+
+  function renderFriends() {
+    var body = $('friends-body'); body.innerHTML = '';
+    $('btn-friends-refresh').hidden = !(Social && Social.user);
+    if (!friendsState.available) {
+      var p = document.createElement('p'); p.className = 'muted center';
+      p.textContent = 'Facebook friends are available in the Jade Rush Android app. You can still play anyone online with a room code.';
+      body.appendChild(p);
+      return;
+    }
+    if (!Social.user) {
+      var card = document.createElement('div'); card.className = 'panel fb-intro';
+      card.innerHTML = '<div class="fb-art" aria-hidden="true"><span>東</span><span>中</span><span>發</span></div><h3>Play with your friends</h3>' +
+        '<p class="muted">Sign in with Facebook to see which of your friends play Jade Rush, check who is online and invite them to a duel.</p>' +
+        '<button class="fb-btn" id="btn-fb-login"><span class="fb-mark" aria-hidden="true">f</span>Continue with Facebook</button>' +
+        '<p class="fine">We only use your name, profile picture and the friends who also play. Nothing is posted to Facebook.</p>';
+      body.appendChild(card);
+      if (friendsState.error) { var e = document.createElement('p'); e.className = 'status error'; e.textContent = friendsState.error; body.appendChild(e); }
+      $('btn-fb-login').addEventListener('click', function () {
+        if (friendsState.busy) return;
+        friendsState.busy = true; friendsState.error = ''; this.textContent = 'Signing in…';
+        Social.login().then(function (user) {
+          friendsState.busy = false; Presence.start(user.id); renderFriends(); probeFriends();
+          if (Social.friendsDeclined) toast('Allow friends access to see who plays.', 3200);
+        }, function (err) {
+          friendsState.busy = false;
+          friendsState.error = err && err.message === 'cancelled' ? '' : 'Facebook sign-in failed. ' + ((err && err.message) || 'Please try again.');
+          renderFriends();
+        });
+      });
+      return;
+    }
+
+    var me = document.createElement('div'); me.className = 'me-card';
+    me.appendChild(avatar(Social.user.picture, Social.user.name));
+    var who = document.createElement('div'); who.className = 'me-text';
+    var nm = document.createElement('b'); nm.textContent = Social.user.name;
+    var st = document.createElement('small');
+    st.textContent = friendsState.presence === 'online' ? 'Online · friends can invite you' : friendsState.presence === 'elsewhere' ? 'Signed in on another device' : 'Connecting…';
+    st.className = friendsState.presence === 'online' ? 'on' : '';
+    who.appendChild(nm); who.appendChild(st); me.appendChild(who);
+    var out = document.createElement('button'); out.className = 'link small-link'; out.textContent = 'Sign out';
+    out.addEventListener('click', function () { Presence.stop(); friendsState.presence = 'offline'; Social.logout().then(renderFriends); });
+    me.appendChild(out);
+    body.appendChild(me);
+
+    var opts = document.createElement('div'); opts.className = 'panel compact';
+    opts.appendChild(chipGroup('Duel', [['race', 'Race'], ['turns', 'Take turns']], lobby.duel, function (v) { lobby.duel = store.duel = v; save(); }));
+    opts.appendChild(chipGroup('Board', [['small', 'Compact'], ['big', 'Grand']], lobby.size, function (v) { lobby.size = store.size = v; save(); }));
+    body.appendChild(opts);
+
+    var h = document.createElement('h3'); h.className = 'section-label'; h.innerHTML = 'Friends who play <span></span>';
+    h.lastChild.textContent = Social.friends.length ? Social.friends.filter(function (f) { return f.status === 'online'; }).length + ' online' : '';
+    body.appendChild(h);
+    if (!Social.friends.length) {
+      var empty = document.createElement('div'); empty.className = 'panel empty';
+      empty.innerHTML = '<p class="muted">None of your Facebook friends play Jade Rush yet. Friends appear here once they sign in with Facebook in the app.</p>';
+      var room = document.createElement('button'); room.className = 'ghost'; room.textContent = 'Use a room code instead';
+      room.addEventListener('click', openLobby);
+      empty.appendChild(room); body.appendChild(empty);
+      return;
+    }
+    var list = document.createElement('div'); list.className = 'friend-list';
+    Social.friends.forEach(function (f) {
+      var row = document.createElement('div'); row.className = 'friend ' + f.status;
+      row.appendChild(avatar(f.picture, f.name));
+      var t = document.createElement('div'); t.className = 'friend-text';
+      var n = document.createElement('b'); n.textContent = f.name;
+      var s2 = document.createElement('small'); s2.textContent = f.status === 'online' ? 'Online' : f.status === 'checking' ? 'Checking…' : 'Offline';
+      t.appendChild(n); t.appendChild(s2); row.appendChild(t);
+      var b = document.createElement('button'); b.className = 'primary invite-btn'; b.textContent = f.inviting ? 'Waiting…' : 'Invite';
+      b.disabled = f.status !== 'online' || !!f.inviting;
+      b.addEventListener('click', function () { inviteFriend(f); });
+      row.appendChild(b);
+      list.appendChild(row);
+    });
+    body.appendChild(list);
+    var note = document.createElement('p'); note.className = 'fine center';
+    note.textContent = 'Friends show as online while Jade Rush is open on their phone.';
+    body.appendChild(note);
+  }
+
+  function probeFriends() {
+    if (!Social || !Social.user || !Social.friends.length) return;
+    var queue = Social.friends.slice(), running = 0;
+    Social.friends.forEach(function (f) { if (f.status !== 'online') f.status = 'checking'; });
+    renderFriends();
+    var next = function () {
+      while (running < 4 && queue.length) {
+        var f = queue.shift(); running++;
+        (function (f) {
+          var wait = Presence.ready ? Presence.probe(f.id) : new Promise(function (r) { setTimeout(function () { r(Presence.probe(f.id)); }, 1500); });
+          wait.then(function (online) {
+            f.status = online ? 'online' : 'offline'; running--;
+            if (!$('friends').hidden) renderFriends();
+            next();
+          });
+        })(f);
+      }
+    };
+    next();
+  }
+
+  function inviteFriend(f) {
+    if (f.inviting) return;
+    f.inviting = true; renderFriends();
+    var duel = lobby.duel, size = lobby.size;
+    Presence.invite(f.id, { t: 'invite', from: { name: Social.user.first }, duel: duel, size: size }).then(function (c) {
+      var timer = setTimeout(function () { finish(); toast(f.first + ' didn\u2019t answer.'); try { c.close(); } catch (e) { /* closed */ } }, 30000);
+      var finish = function () { clearTimeout(timer); c.off('data', onReply); f.inviting = false; if (!$('friends').hidden) renderFriends(); };
+      var onReply = function (m) {
+        if (!m || typeof m !== 'object') return;
+        if (m.t === 'accept') { finish(); G = { mode: null }; Net.adopt(c, true, f.first); }
+        else if (m.t === 'decline' || m.t === 'busy') { finish(); toast(m.t === 'busy' ? f.first + ' is in a game right now.' : f.first + ' declined.'); try { c.close(); } catch (e) { /* closed */ } }
+      };
+      c.on('data', onReply);
+      toast('Invite sent to ' + f.first + '.');
+    }, function () {
+      f.inviting = false; f.status = 'offline'; renderFriends(); toast(f.first + ' is not online.');
+    });
+  }
+
+  function handleInvite(c, m) {
+    var name = String((m.from && m.from.name) || 'A friend').slice(0, 40);
+    var duel = m.duel === 'turns' ? 'turns' : 'race', size = m.size === 'big' ? 'big' : 'small';
+    var playing = !$('game').hidden && G.lay && !G.over;
+    if (playing || !$('modal').hidden) { c.send({ t: 'busy' }); setTimeout(function () { try { c.close(); } catch (e) { /* closed */ } }, 300); return; }
+    A.pop(); buzz([30, 60, 30]);
+    var body = document.createElement('p');
+    body.textContent = (duel === 'race' ? 'A race' : 'A take-turns duel') + ' on the ' + (size === 'big' ? 'Grand' : 'Compact') + ' board.';
+    var decline = function () { c.send({ t: 'decline' }); setTimeout(function () { try { c.close(); } catch (e) { /* closed */ } }, 300); };
+    modal({
+      title: name + ' invites you to play', body: body, back: function () { closeModal(); decline(); },
+      actions: [{ label: 'Decline', run: decline }, { label: 'Play', primary: true, run: function () {
+        c.send({ t: 'accept' }); lobby.duel = duel; lobby.size = size; Net.adopt(c, false, name);
+      } }]
+    });
+    c.on('close', function () { if (!$('modal').hidden && $('modal-title').textContent.indexOf(name) === 0 && !Net.conn) closeModal(); });
+  }
+
+  function initFriends() {
+    if (!Social) return;
+    Social.available().then(function (ok) {
+      friendsState.available = ok;
+      $('btn-lobby-friends').hidden = !ok;
+      if (!ok) return;
+      $('online-meta').textContent = 'Friends or room code';
+      Presence.onInvite = handleInvite;
+      Presence.onStatus = function (state) { friendsState.presence = state; if (!$('friends').hidden) renderFriends(); };
+      Social.onChange = function () { if (!$('friends').hidden) renderFriends(); };
+      Social.restore().then(function (user) { if (user) Presence.start(user.id); });
+    });
+    Shell.onResume(function () { if (Social.user && !Presence.peer) Presence.start(Social.user.id); });
+  }
+
   // ------------------------------------------------------------- pause & settings
   function canPause() { return !$('game').hidden && G.lay && !G.over && (G.mode === 'journey' || G.mode === 'daily' || G.mode === 'local' || G.mode === 'ai'); }
   function pauseGame() {
@@ -704,6 +882,9 @@
     var box = document.createElement('div'); box.className = 'settings';
     box.appendChild(toggleRow('Sound effects', store.sound, function (v) { store.sound = v; A.setEnabled(v); save(); if (v) A.select(); }));
     box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }));
+    box.appendChild(toggleRow('Battery saver (fewer effects)', window.JadeLite, function (v) {
+      store.lite = v; window.JadeLite = v; save(); board.resize(); demo.resize(); sky.setTheme(currentTheme());
+    }));
     box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(); }));
     box.appendChild(linkRow('How to play', function () { closeModal(); howTo(after); }));
     box.appendChild(linkRow('Privacy policy', function () { window.open(PRIVACY_URL, '_blank'); }));
@@ -786,10 +967,19 @@
     });
   });
   $('btn-online').addEventListener('click', openLobby);
+  $('btn-lobby-friends').addEventListener('click', openFriends);
+  $('btn-friends-refresh').addEventListener('click', function () {
+    if (!Social || !Social.user) return;
+    Social.refresh().then(probeFriends, function () { toast('Couldn\u2019t reach Facebook. Check your connection.'); });
+  });
   $('btn-howto').addEventListener('click', function () { howTo(); });
   $('btn-settings').addEventListener('click', function () { openSettings(); });
   document.querySelectorAll('[data-back]').forEach(function (b) {
-    b.addEventListener('click', function () { if (!$('lobby').hidden) Net.close(); show('home'); });
+    b.addEventListener('click', function () {
+      if (!$('friends').hidden) { openLobby(); return; }
+      if (!$('lobby').hidden) Net.close();
+      show('home');
+    });
   });
   $('level-grid').addEventListener('click', function (e) {
     var b = e.target.closest('[data-level]'); if (b && !b.disabled) startLevel(Number(b.dataset.level));
@@ -848,6 +1038,7 @@
   Shell.onBack(function () {
     if (!$('modal').hidden) { if (modal.back) modal.back(); else closeModal(); return true; }
     if (!$('game').hidden) { $('btn-quit').click(); return true; }
+    if (!$('friends').hidden) { openLobby(); return true; }
     if (!$('levels').hidden || !$('lobby').hidden) { if (!$('lobby').hidden) Net.close(); show('home'); return true; }
     return false;
   });
@@ -898,6 +1089,7 @@
 
   window.JadeRush = { state: function () { return G; }, board: board }; // read-only hook for automated tests
 
+  initFriends();
   applyTheme();
   Shell.styleBars(currentTheme().bg[0]);
   show('home');

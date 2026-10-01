@@ -6,6 +6,7 @@
 <title>Jade Rush</title>
 <meta name="description" content="Jade Rush is a Mahjong tile-matching game with endless levels, a clock to beat, and two-player online duels.">
 <meta name="theme-color" content="#0d2622">
+<link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -49,7 +50,7 @@
 
       <h2 class="section-label">Duel <span>2 players</span></h2>
       <div class="trio">
-        <button id="btn-online" class="tile t-violet"><span class="mini" aria-hidden="true">中</span><span class="tile-title">Online</span><span class="tile-meta">Race or take turns</span></button>
+        <button id="btn-online" class="tile t-violet"><span class="mini" aria-hidden="true">中</span><span class="tile-title">Online</span><span class="tile-meta" id="online-meta">Race or take turns</span></button>
         <button id="btn-local" class="tile t-coral"><span class="mini" aria-hidden="true">南</span><span class="tile-title">Pass &amp; play</span><span class="tile-meta">One device</span></button>
         <button id="btn-ai" class="tile t-blue"><span class="mini" aria-hidden="true">北</span><span class="tile-title">Vs computer</span><span class="tile-meta" id="ai-meta">3 levels</span></button>
       </div>
@@ -71,6 +72,16 @@
     <div class="level-scroll" id="level-grid"></div>
   </section>
 
+  <!-- FRIENDS -->
+  <section id="friends" class="screen" hidden>
+    <header class="bar">
+      <button class="icon-btn" data-back aria-label="Back">←</button>
+      <h2 class="bar-title">Friends</h2>
+      <button class="icon-btn" id="btn-friends-refresh" aria-label="Refresh friends">↻</button>
+    </header>
+    <div class="friends-body" id="friends-body"></div>
+  </section>
+
   <!-- ONLINE LOBBY -->
   <section id="lobby" class="screen" hidden>
     <header class="bar">
@@ -79,6 +90,11 @@
       <span class="bar-side"></span>
     </header>
     <div class="lobby">
+      <button id="btn-lobby-friends" class="fb-panel" hidden>
+        <span class="fb-mark" aria-hidden="true">f</span>
+        <span><b>Play with Facebook friends</b><small>See who's online and send an invite</small></span>
+        <i aria-hidden="true">›</i>
+      </button>
       <div class="panel">
         <h3>Host a room</h3>
         <div class="opt-group">
@@ -185,6 +201,7 @@
 <script src="js/net.js" defer></script>
 <script src="js/native.js" defer></script>
 <script src="js/ads.js" defer></script>
+<script src="js/social.js" defer></script>
 <script src="js/main.js" defer></script>
 </body>
 </html>

@@ -41,6 +41,11 @@ const insets = await page.evaluate(() => getComputedStyle(document.documentEleme
 log(true, 'Safe-area inset top from Capacitor: ' + (insets || '(none)'));
 const fontsOk = await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('700 20px "Noto Serif SC"', '中') && document.fonts.check('800 20px "Bricolage Grotesque"', 'Jade'); });
 log(fontsOk, 'Bundled fonts loaded');
+const fb = await page.evaluate(() => window.NativeShell.buildInfo().then(i => i.facebook));
+const fbEntryHidden = await page.evaluate(() => document.getElementById('btn-lobby-friends').hidden);
+log(fb ? !fbEntryHidden : fbEntryHidden, fb ? 'Facebook Login configured: Friends entry shown' : 'Facebook Login not configured: Friends entry hidden');
+const lite = await page.evaluate(() => window.JadeLite);
+log(true, 'Battery saver auto-detected: ' + lite);
 
 // Settings screen.
 await page.evaluate(() => document.getElementById('btn-settings').click());
