@@ -26,7 +26,8 @@ page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 
 await page.waitForFunction(() => window.JadeRush && document.getElementById('home') && !document.getElementById('home').hidden, null, { timeout: 30000 });
-await page.evaluate(() => { localStorage.setItem('jaderush.v1', JSON.stringify({ seenHowto: true, level: 1 })); location.reload(); });
+await page.evaluate(() => { localStorage.setItem('jaderush.v1', JSON.stringify({ seenHowto: true, level: 1 })); setTimeout(() => location.reload(), 100); });
+await sleep(1500);
 await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
 await sleep(2500);
 const shot = async name => writeFileSync(`${OUT}/${name}.png`, await device.screenshot());

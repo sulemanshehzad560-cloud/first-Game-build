@@ -28,8 +28,19 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 To publish it, push to GitHub and turn on **Settings → Pages → Deploy from branch** for this branch. Any static host works too.
 
-Online play uses [PeerJS](https://peerjs.com/) and its free public signaling server. Only moves travel between the players; both browsers build the same board from a shared seed.
+Online play uses [PeerJS](https://peerjs.com/) (bundled in `vendor/`) and its free public signaling server. Only moves travel between the players; both browsers build the same board from a shared seed.
 To use your own PeerServer, set `window.NOVA_PEER_OPTIONS = { host, port, path, secure }` before `js/net.js` loads.
+
+## Android app
+
+The game ships as an Android app built with [Capacitor](https://capacitorjs.com/) (package `com.sulemanshehzad.jaderush`, target API 36).
+
+* **Builds:** every push runs `.github/workflows/android.yml`. It runs the engine tests and Android lint, builds the debug APK and the release bundle (AAB), tests both on an Android 14 emulator, and attaches everything to a GitHub release. The emulator test drives the game with Playwright: it clears a level, checks pause, a duel, the back button and the logs.
+* **Ads:** Google AdMob interstitials between boards (`js/ads.js`), with the consent form and an "Ad privacy choices" entry in Settings. Debug builds only request Google's test ads.
+* **Signing:** the release bundle is signed with an upload key that is never committed. Add it as repository secrets to sign in CI (see `docs/PLAY_STORE_GUIDE.md`).
+* **Local build:** `npm ci && npm run android:sync`, then open `android/` in Android Studio or run `./gradlew bundleRelease`.
+* **Store assets:** `store/` (icon, feature graphic, phone screenshots), regenerated with `npm run assets`.
+* **Publishing:** the full Play Console checklist is in [`docs/PLAY_STORE_GUIDE.md`](docs/PLAY_STORE_GUIDE.md).
 
 ## Code map
 
@@ -40,6 +51,8 @@ To use your own PeerServer, set `window.NOVA_PEER_OPTIONS = { host, port, path, 
 | `js/board.js` | 3D board renderer, hit testing, hints, match effects. |
 | `js/main.js` | Screens, timed play, duels, saved progress (`localStorage`), online protocol, home demo. |
 | `js/net.js` | PeerJS room hosting and joining. |
+| `js/native.js` | Android integration: back button, status bar, pause on background, build type. |
+| `js/ads.js` | AdMob interstitials and consent (no-op on the web). |
 | `js/audio.js` | WebAudio tile clacks and combo chimes. |
 
 ## Tests
