@@ -31,7 +31,8 @@
     onResume: function (fn) { if (App) App.addListener('resume', fn); },
     styleBars: function (color) {
       if (!StatusBar) return;
-      try { StatusBar.setStyle({ style: 'DARK' }); StatusBar.setBackgroundColor && StatusBar.setBackgroundColor({ color: color }); } catch (e) { /* older WebView */ }
+      StatusBar.setStyle({ style: 'DARK' }).catch(function () {});
+      if (StatusBar.setBackgroundColor) StatusBar.setBackgroundColor({ color: color }).catch(function () {});
     }
   };
 })(this);
