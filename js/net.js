@@ -5,7 +5,7 @@
  */
 (function (global) {
   'use strict';
-  var PREFIX = 'novachain-room-';
+  var PREFIX = 'jaderush-room-';
   var ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   function randomCode() {

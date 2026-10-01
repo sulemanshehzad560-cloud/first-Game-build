@@ -3,31 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Nova Chain</title>
-<meta name="description" content="Nova Chain is a chain-reaction puzzle with endless levels and two-player online duels.">
-<meta name="theme-color" content="#0c0a1d">
+<title>Jade Rush</title>
+<meta name="description" content="Jade Rush is a Mahjong tile-matching game with endless levels, a clock to beat, and two-player online duels.">
+<meta name="theme-color" content="#0d2622">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&text=%E4%B8%80%E4%BA%8C%E4%B8%89%E5%9B%9B%E4%BA%94%E5%85%AD%E4%B8%83%E5%85%AB%E4%B9%9D%E8%90%AC%E6%9D%B1%E5%8D%97%E8%A5%BF%E5%8C%97%E4%B8%AD%E7%99%BC&display=block">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<canvas id="sky" aria-hidden="true"></canvas>
-
 <main id="app">
   <!-- HOME -->
   <section id="home" class="screen">
     <header class="brand">
-      <canvas id="demo" aria-label="A live chain reaction demo"></canvas>
-      <h1 class="logo"><span>Nova</span><span>Chain</span></h1>
-      <p class="tagline">One tap. A thousand bursts.</p>
+      <canvas id="demo" aria-label="Tiles being matched on a small demo board"></canvas>
+      <h1 class="logo">Jade<span>Rush</span></h1>
+      <p class="tagline">Match free tiles. Beat the clock. Beat your friends.</p>
     </header>
 
     <nav class="menu">
       <button id="btn-continue" class="cta">
         <span class="cta-eyebrow">Journey</span>
         <span class="cta-title" id="continue-label">Level 1</span>
-        <span class="cta-meta" id="continue-meta">Endless levels · 0 ★</span>
+        <span class="cta-meta" id="continue-meta">Endless levels</span>
       </button>
       <div class="pair">
         <button id="btn-levels" class="tile">
@@ -35,16 +34,16 @@
           <span class="tile-meta" id="levels-meta">Replay for 3 ★</span>
         </button>
         <button id="btn-daily" class="tile">
-          <span class="tile-title">Daily spark</span>
-          <span class="tile-meta" id="daily-meta">New puzzle every day</span>
+          <span class="tile-title">Daily board</span>
+          <span class="tile-meta" id="daily-meta">New board every day</span>
         </button>
       </div>
 
-      <h2 class="section-label">Duel <span>two players · cyan vs rose</span></h2>
+      <h2 class="section-label">Duel <span>2 players</span></h2>
       <div class="trio">
-        <button id="btn-online" class="tile duel"><span class="tile-title">Online</span><span class="tile-meta">Room code</span></button>
+        <button id="btn-online" class="tile duel"><span class="tile-title">Online</span><span class="tile-meta">Race or take turns</span></button>
         <button id="btn-local" class="tile duel"><span class="tile-title">Pass &amp; play</span><span class="tile-meta">One device</span></button>
-        <button id="btn-ai" class="tile duel"><span class="tile-title">Vs Nova AI</span><span class="tile-meta" id="ai-meta">3 levels</span></button>
+        <button id="btn-ai" class="tile duel"><span class="tile-title">Vs computer</span><span class="tile-meta" id="ai-meta">3 levels</span></button>
       </div>
     </nav>
 
@@ -57,7 +56,7 @@
   <!-- LEVEL MAP -->
   <section id="levels" class="screen" hidden>
     <header class="bar">
-      <button class="icon-btn back" data-back aria-label="Back">←</button>
+      <button class="icon-btn" data-back aria-label="Back">←</button>
       <h2 class="bar-title">Level map</h2>
       <span class="bar-side" id="levels-stars">0 ★</span>
     </header>
@@ -67,17 +66,27 @@
   <!-- ONLINE LOBBY -->
   <section id="lobby" class="screen" hidden>
     <header class="bar">
-      <button class="icon-btn back" data-back aria-label="Back">←</button>
+      <button class="icon-btn" data-back aria-label="Back">←</button>
       <h2 class="bar-title">Online duel</h2>
       <span class="bar-side"></span>
     </header>
     <div class="lobby">
       <div class="panel">
         <h3>Host a room</h3>
-        <p class="muted">Share the code with a friend. You play cyan.</p>
-        <div class="size-pick" role="radiogroup" aria-label="Board size">
-          <button class="chip" data-size="5x7" role="radio" aria-checked="false">Compact 5×7</button>
-          <button class="chip" data-size="6x9" role="radio" aria-checked="true">Classic 6×9</button>
+        <div class="opt-group">
+          <span>Mode</span>
+          <div class="size-pick" id="pick-duel" role="radiogroup" aria-label="Duel mode">
+            <button class="chip" data-v="race" role="radio">Race</button>
+            <button class="chip" data-v="turns" role="radio">Take turns</button>
+          </div>
+          <p class="muted small" id="duel-desc"></p>
+        </div>
+        <div class="opt-group">
+          <span>Board</span>
+          <div class="size-pick" id="pick-size" role="radiogroup" aria-label="Board size">
+            <button class="chip" data-v="small" role="radio">Compact</button>
+            <button class="chip" data-v="big" role="radio">Grand</button>
+          </div>
         </div>
         <button id="btn-host" class="primary">Create room</button>
         <div id="host-box" class="code-box" hidden>
@@ -90,7 +99,6 @@
       </div>
       <div class="panel">
         <h3>Join a room</h3>
-        <p class="muted">Enter your friend's 5-letter code. You play rose.</p>
         <form id="join-form" class="join">
           <label class="sr-only" for="join-code">Room code</label>
           <input id="join-code" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE">
@@ -104,39 +112,44 @@
   <!-- GAME -->
   <section id="game" class="screen" hidden>
     <header class="bar">
-      <button class="icon-btn back" id="btn-quit" aria-label="Back to menu">←</button>
+      <button class="icon-btn" id="btn-quit" aria-label="Back to menu">←</button>
       <h2 class="bar-title" id="game-title">Level 1</h2>
       <div class="bar-actions">
-        <button class="icon-btn" id="btn-undo" aria-label="Undo">↶</button>
         <button class="icon-btn" id="btn-hint" aria-label="Hint"><span>?</span><b id="hint-count">3</b></button>
-        <button class="icon-btn" id="btn-restart" aria-label="Restart">↻</button>
+        <button class="icon-btn" id="btn-shuffle" aria-label="Shuffle"><span>⇄</span><b id="shuffle-count">3</b></button>
       </div>
     </header>
 
-    <div class="hud" id="hud-puzzle">
-      <div class="meter">
-        <span class="meter-label">Taps</span>
-        <div class="taps" id="taps"></div>
+    <div class="hud" id="hud-solo">
+      <div class="clock"><i id="clock-fill"></i><span id="clock-text">0:00</span></div>
+      <div class="stats">
+        <div><span class="label">Score</span><b id="score">0</b></div>
+        <div><span class="label">Combo</span><b id="combo">×1</b></div>
+        <div><span class="label">Tiles left</span><b id="left">0</b></div>
       </div>
-      <div class="meter grow">
-        <span class="meter-label">Lit <b id="lit-text">0/0</b></span>
-        <div class="litbar"><i id="lit-fill"></i></div>
+      <div class="rival" id="rival" hidden>
+        <span class="label">Rival</span>
+        <div class="rival-bar"><i id="rival-fill"></i></div>
+        <b id="rival-text">0 left</b>
       </div>
     </div>
 
-    <div class="hud versus" id="hud-versus" hidden>
-      <div class="player p0" id="chip-0"><span class="dot"></span><span class="pname" id="pname-0">Cyan</span><b id="pcount-0">0</b></div>
-      <span class="turn-note" id="turn-note">Cyan to move</span>
-      <div class="player p1" id="chip-1"><b id="pcount-1">0</b><span class="pname" id="pname-1">Rose</span><span class="dot"></span></div>
+    <div class="hud" id="hud-duel" hidden>
+      <div class="players">
+        <div class="player p0" id="chip-0"><span class="dot"></span><span class="pname" id="pname-0">Jade</span><b id="pscore-0">0</b></div>
+        <span class="turn-note" id="turn-note"></span>
+        <div class="player p1" id="chip-1"><b id="pscore-1">0</b><span class="pname" id="pname-1">Ember</span><span class="dot"></span></div>
+      </div>
+      <div class="turn-clock"><i id="turn-fill"></i></div>
     </div>
 
     <div class="board-wrap" id="board-wrap">
       <canvas id="board"></canvas>
-      <div id="emote-layer" aria-live="polite"></div>
+      <div id="fx-layer" aria-live="polite"></div>
     </div>
 
     <div class="foot">
-      <p id="goal" class="goal">Light up every cell.</p>
+      <p id="goal" class="goal"></p>
       <div id="emotes" class="emotes" hidden>
         <button data-emote="🔥">🔥</button><button data-emote="😱">😱</button><button data-emote="😎">😎</button><button data-emote="👏">👏</button><button data-emote="GG">GG</button>
       </div>
@@ -155,10 +168,11 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
-<script src="js/engine.js" defer></script>
+<script src="js/mahjong.js" defer></script>
+<script src="js/tiles.js" defer></script>
+<script src="js/board.js" defer></script>
 <script src="js/audio.js" defer></script>
 <script src="js/net.js" defer></script>
-<script src="js/render.js" defer></script>
 <script src="js/main.js" defer></script>
 </body>
 </html>

@@ -1,49 +1,44 @@
-/* Nova Chain — app controller: screens, game modes, persistence, online sync. */
+/* Jade Rush — app controller: screens, solo timed play, duels, persistence, online sync. */
 (function () {
   'use strict';
-  var E = window.NovaEngine, R = window.NovaRender, A = window.NovaAudio, Net = window.NovaNet;
+  var M = window.Mahjong, A = window.GameAudio, Net = window.NovaNet;
   var $ = function (id) { return document.getElementById(id); };
+  var TURN_MS = 15000, COMBO_MS = 5000, HINT_COST_MS = 10000;
+  var COLORS = ['#4fd1a5', '#ff7a59'];
 
   // ------------------------------------------------------------- storage
-  var SAVE_KEY = 'novachain.v1';
-  var store = { level: 1, stars: {}, hints: 3, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, size: '6x9' };
+  var SAVE_KEY = 'jaderush.v1';
+  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
   function totalStars() { var s = 0; for (var k in store.stars) s += store.stars[k]; return s; }
-  function today() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function dayKey(offset) { var d = new Date(Date.now() + (offset || 0) * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function fmtTime(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
   A.setEnabled(store.sound);
 
-  // ------------------------------------------------------------- screens
+  // ------------------------------------------------------------- ui helpers
   var screens = ['home', 'levels', 'lobby', 'game'];
   function show(id) {
     screens.forEach(function (s) { $(s).hidden = s !== id; });
     if (id === 'home') refreshHome();
-    if (id === 'game') requestAnimationFrame(function () { view.layout(); });
+    if (id === 'game') board.resize();
   }
-
   function toast(msg, ms) {
-    var t = $('toast');
-    t.textContent = msg; t.hidden = false;
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(function () { t.hidden = true; }, ms || 2200);
+    var t = $('toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast.timer); toast.timer = setTimeout(function () { t.hidden = true; }, ms || 2200);
   }
-
   function modal(opts) {
     $('modal-title').textContent = opts.title;
-    var body = $('modal-body');
-    body.innerHTML = '';
+    var body = $('modal-body'); body.innerHTML = '';
     if (typeof opts.body === 'string') { var p = document.createElement('p'); p.textContent = opts.body; body.appendChild(p); }
     else if (opts.body) body.appendChild(opts.body);
-    var st = $('modal-stars');
-    st.hidden = opts.stars == null;
+    var st = $('modal-stars'); st.hidden = opts.stars == null;
     if (opts.stars != null) st.innerHTML = [1, 2, 3].map(function (k) { return '<span class="' + (k <= opts.stars ? 'on' : '') + '">★</span>'; }).join('');
-    var act = $('modal-actions');
-    act.innerHTML = '';
+    var act = $('modal-actions'); act.innerHTML = '';
     (opts.actions || []).forEach(function (a) {
       var b = document.createElement('button');
-      b.className = a.primary ? 'primary' : 'ghost';
-      b.textContent = a.label;
-      b.addEventListener('click', function () { if (!a.keep) closeModal(); a.run && a.run(); });
+      b.className = a.primary ? 'primary' : 'ghost'; b.textContent = a.label;
+      b.addEventListener('click', function () { closeModal(); if (a.run) a.run(); });
       act.appendChild(b);
     });
     $('modal').hidden = false;
@@ -51,15 +46,19 @@
     if (first) first.focus({ preventScroll: true });
   }
   function closeModal() { $('modal').hidden = true; }
-
+  function resultGrid(pairs) {
+    var d = document.createElement('div'); d.className = 'result-grid';
+    pairs.forEach(function (p) { var c = document.createElement('div'); c.innerHTML = '<span class="label"></span><b></b>'; c.firstChild.textContent = p[0]; c.lastChild.textContent = p[1]; d.appendChild(c); });
+    return d;
+  }
   function chipGroup(label, options, value, onPick) {
     var wrap = document.createElement('div'); wrap.className = 'opt-group';
     var l = document.createElement('span'); l.textContent = label; wrap.appendChild(l);
     var row = document.createElement('div'); row.className = 'size-pick'; row.setAttribute('role', 'radiogroup');
     options.forEach(function (o) {
       var b = document.createElement('button');
-      b.className = 'chip'; b.type = 'button'; b.setAttribute('role', 'radio');
-      b.textContent = o[1]; b.setAttribute('aria-checked', String(o[0] === value));
+      b.className = 'chip'; b.type = 'button'; b.setAttribute('role', 'radio'); b.textContent = o[1];
+      b.setAttribute('aria-checked', String(o[0] === value));
       b.addEventListener('click', function () {
         row.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-checked', 'false'); });
         b.setAttribute('aria-checked', 'true'); onPick(o[0]);
@@ -69,339 +68,431 @@
     wrap.appendChild(row);
     return wrap;
   }
+  function floatText(text, x, y, big, color) {
+    var el = document.createElement('div');
+    el.className = 'float' + (big ? ' big' : ''); el.textContent = text;
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    if (color) el.style.color = color;
+    $('fx-layer').appendChild(el);
+    setTimeout(function () { el.remove(); }, 1000);
+  }
 
   // ------------------------------------------------------------- home
   function refreshHome() {
-    var stars = totalStars(), d = store.daily[today()];
+    var d = store.daily[dayKey()];
     $('continue-label').textContent = 'Level ' + store.level;
-    $('continue-meta').textContent = 'Endless levels · ' + stars + ' ★ collected';
+    $('continue-meta').textContent = 'Endless levels · ' + totalStars() + ' ★ collected';
     $('levels-meta').textContent = (store.level - 1) + ' cleared';
-    $('daily-meta').textContent = d ? 'Done today · ' + '★★★'.slice(0, d) : store.streak.n > 1 && store.streak.last === yesterday() ? store.streak.n + '-day streak' : 'New puzzle every day';
+    $('daily-meta').textContent = d ? 'Done today · ' + '★★★'.slice(0, d)
+      : store.streak.n > 1 && store.streak.last === dayKey(-1) ? store.streak.n + '-day streak' : 'New board every day';
     $('ai-meta').textContent = store.wins.ai ? store.wins.ai + ' wins' : '3 levels';
     $('btn-sound').textContent = store.sound ? 'Sound on' : 'Sound off';
     $('btn-sound').setAttribute('aria-pressed', String(store.sound));
   }
-  function yesterday() { var d = new Date(Date.now() - 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-
   function renderLevelGrid() {
-    var grid = $('level-grid'), max = store.level + 5, html = '';
-    for (var L = 1; L <= max; L++) {
+    var grid = $('level-grid'), html = '';
+    for (var L = 1; L <= store.level + 5; L++) {
       var s = store.stars[L] || 0, locked = L > store.level;
       html += '<button class="lvl' + (L === store.level ? ' current' : '') + '" data-level="' + L + '"' + (locked ? ' disabled' : '') + '>' + L +
         '<small>' + (locked ? '' : '★★★'.slice(0, s) || '·') + '</small></button>';
     }
     grid.innerHTML = html;
     $('levels-stars').textContent = totalStars() + ' ★';
-    var cur = grid.querySelector('.current');
-    if (cur) cur.scrollIntoView({ block: 'center' });
+    var cur = grid.querySelector('.current'); if (cur) cur.scrollIntoView({ block: 'center' });
   }
 
-  // ------------------------------------------------------------- game state
-  var view = new R.BoardView($('board'));
-  var G = { mode: null, busy: false };
+  // ------------------------------------------------------------- shared board state
+  var board = new window.TileBoard($('board'));
+  var G = { mode: null };
+  function isTurns() { return G.duel === 'turns'; }
+  function midpoint(a, b) { var r1 = board.rect(a), r2 = board.rect(b); return [(r1.x + r2.x + r1.w) / 2, (r1.y + r2.y + r1.h) / 2]; }
 
-  function simulate(b, i, player, stop) {
-    b.n[i]++; b.o[i] = player;
-    var start = R.snap(b), frames = [];
-    E.resolve(b, player, function (ex) { frames.push({ ex: ex, snap: R.snap(b) }); }, stop);
-    return { start: start, frames: frames };
+  function baseState(gen) {
+    var n = gen.layout.n;
+    return { lay: gen.layout, kinds: gen.kinds.slice(), present: new Uint8Array(n).fill(1), left: n, sel: -1, over: false, gen: gen };
   }
-
-  var hooks = {
-    onWave: function (k, size) {
-      A.burst(k);
-      if (k < 6 && navigator.vibrate) { try { navigator.vibrate(size > 3 ? 14 : 6); } catch (e) { /* not allowed */ } }
-    }
-  };
-
-  // ------------------------------------------------------------- journey
-  function startPuzzle(level, daily) {
-    G = { mode: daily ? 'daily' : 'puzzle', busy: true, level: level };
-    $('game-title').textContent = daily ? 'Daily spark' : 'Level ' + level;
-    $('hud-puzzle').hidden = false; $('hud-versus').hidden = true;
-    $('btn-undo').hidden = false; $('btn-hint').hidden = false; $('btn-restart').hidden = false;
-    $('emotes').hidden = true; $('goal').hidden = false;
-    $('goal').textContent = 'Building level…';
+  function mountBoard(showFree) {
+    $('modal').hidden = true;
     show('game');
-    setTimeout(function () {
-      var gen = daily ? E.generateDaily(today()) : E.generateLevel(level);
-      G.initial = gen.board; G.board = gen.board.clone(); G.par = gen.par;
-      G.limit = gen.par + 2; G.used = 0; G.history = []; G.busy = false;
-      view.setBoard(G.board, 'puzzle');
-      $('goal').textContent = goalText();
-      updatePuzzleHud();
-      if (!daily) setTimeout(function () { E.generateLevel(level + 1); }, 400); // warm the next level
-      if (!daily && level === 1 && !store.seenHowto) { store.seenHowto = true; save(); howTo(); }
-    }, 30);
+    board.set(G.lay, G.kinds, G.present, showFree);
   }
 
-  function goalText() {
-    if (G.mode === 'puzzle' && G.level <= 2) return 'Tap a cell. Full cells burst into their neighbours. Light every cell.';
-    return 'Light every cell. ' + G.par + (G.par === 1 ? ' tap' : ' taps') + ' for 3 ★.';
-  }
-
-  function updatePuzzleHud() {
-    var html = '';
-    for (var k = 0; k < G.limit; k++) html += '<i class="' + (k < G.par ? 'par' : '') + (k < G.used ? ' used' : '') + '"></i>';
-    $('taps').innerHTML = html;
-    var lit = G.board.litCount(), total = G.board.t.cells.length;
-    $('lit-text').textContent = lit + '/' + total;
-    $('lit-fill').style.width = (100 * lit / total) + '%';
-    $('btn-undo').disabled = !G.history.length;
-    $('hint-count').textContent = store.hints;
-  }
-
-  function puzzleTap(i) {
-    if (G.busy || G.used >= G.limit) return;
-    G.history.push(G.board.clone());
-    G.used++; G.busy = true; view.hint = -1;
-    A.place();
-    var b = G.board, sim = simulate(b, i, 0, function () { return b.allLit(); });
-    updatePuzzleHud();
-    view.play(i, 0, sim.start, sim.frames, hooks).then(function () {
-      G.busy = false;
-      updatePuzzleHud();
-      if (b.allLit()) setTimeout(puzzleWon, 350);
-      else if (G.used >= G.limit) setTimeout(puzzleFailed, 350);
+  // ------------------------------------------------------------- timed play (journey, daily, online race)
+  function startTimed(gen, cfg) {
+    G = baseState(gen);
+    Object.assign(G, cfg, {
+      score: 0, combo: 0, bestCombo: 0, lastMatch: 0, usedHint: false,
+      limit: Math.round(gen.layout.n * gen.spec.secPerTile) * 1000,
+      hints: cfg.duel === 'race' ? 1 : gen.spec.hints,
+      shuffles: cfg.duel === 'race' ? 2 : gen.spec.shuffles,
+      rival: { left: gen.layout.n, done: false, out: false, score: 0 }
     });
+    G.timeLeft = G.limit;
+    $('game-title').textContent = cfg.title;
+    $('hud-solo').hidden = false; $('hud-duel').hidden = true;
+    $('rival').hidden = cfg.duel !== 'race';
+    $('btn-hint').hidden = false; $('btn-shuffle').hidden = false;
+    $('emotes').hidden = cfg.duel !== 'race'; $('goal').hidden = cfg.duel === 'race';
+    $('goal').textContent = gen.spec.showFree ? 'Match free tiles in pairs. Dimmed tiles are blocked.' : 'Free tiles are no longer highlighted. Look closely.';
+    board.accent = '#e8b64c';
+    mountBoard(gen.spec.showFree && cfg.duel !== 'race');
+    updateTimedHud();
   }
 
-  function puzzleWon() {
-    var stars = G.used <= G.par ? 3 : G.used === G.par + 1 ? 2 : 1;
+  function startLevel(level) {
+    startTimed(M.generateLevel(level), { mode: 'journey', level: level, title: 'Level ' + level });
+    setTimeout(function () { M.generateLevel(level + 1); }, 500);
+    if (level === 1 && !store.seenHowto) { store.seenHowto = true; save(); G.paused = true; howTo(function () { G.paused = false; }); }
+  }
+  function startDaily() { startTimed(M.generateDaily(dayKey()), { mode: 'daily', title: 'Daily board' }); }
+
+  function updateTimedHud() {
+    $('score').textContent = G.score;
+    $('combo').textContent = '×' + Math.max(1, G.combo);
+    $('combo').classList.toggle('hot', G.combo >= 3);
+    $('left').textContent = G.left;
+    $('hint-count').textContent = G.hints; $('btn-hint').disabled = G.hints <= 0;
+    $('shuffle-count').textContent = G.shuffles; $('btn-shuffle').disabled = G.shuffles <= 0;
+    if (G.duel === 'race') {
+      var n = G.lay.n;
+      $('rival-fill').style.width = (100 * (n - G.rival.left) / n) + '%';
+      $('rival-text').textContent = G.rival.done ? 'Cleared' : G.rival.out ? 'Out · ' + G.rival.left + ' left' : G.rival.left + ' left';
+    }
+    drawClock();
+  }
+  function drawClock() {
+    var frac = G.timeLeft / G.limit;
+    $('clock-fill').style.width = (100 * frac) + '%';
+    $('clock-text').textContent = fmtTime(G.timeLeft);
+    $('clock-fill').parentNode.classList.toggle('low', frac < 0.2);
+  }
+
+  function tickTimed(dt) {
+    if (G.over || G.paused || !G.limit || isTurns()) return;
+    if (G.mode !== 'online' && !$('modal').hidden) return;
+    var before = Math.ceil(G.timeLeft / 1000);
+    G.timeLeft -= dt;
+    var after = Math.ceil(G.timeLeft / 1000);
+    if (after !== before) { drawClock(); if (after <= 10 && after > 0) A.tick(); }
+    if (G.timeLeft <= 0) { G.timeLeft = 0; drawClock(); timedFail('Out of time'); }
+  }
+
+  function timedMatch(a, b) {
+    var now = performance.now(), kind = G.kinds[a];
+    G.combo = now - G.lastMatch < COMBO_MS ? Math.min(G.combo + 1, 12) : 1;
+    G.lastMatch = now; G.bestCombo = Math.max(G.bestCombo, G.combo);
+    var pts = 10 * G.combo + (kind >= 27 ? 10 : 0);
+    G.score += pts;
+    var mp = midpoint(a, b);
+    floatText('+' + pts, mp[0], mp[1], G.combo >= 4);
+    if (G.combo >= 3) floatText('Combo ×' + G.combo, mp[0], mp[1] - 34, false, '#fff2c9');
+    A.match(G.combo);
+    $('btn-shuffle').classList.remove('attention');
+    if (G.duel === 'race') Net.send({ t: 'prog', left: G.left, score: G.score });
+    updateTimedHud();
+    if (G.left === 0) { timedWin(); return; }
+    if (!M.freePairs(G.lay, G.present, G.kinds).length) {
+      if (G.shuffles > 0) { toast('No moves left. Shuffle!'); $('btn-shuffle').classList.add('attention'); }
+      else timedFail('No moves left');
+    }
+  }
+
+  function timedWin() {
+    G.over = true; G.won = true;
+    var secs = Math.floor(G.timeLeft / 1000), bonus = secs * 5;
+    G.score += bonus;
+    var frac = G.timeLeft / G.limit;
+    var stars = frac >= 0.4 && !G.usedHint ? 3 : frac >= 0.2 ? 2 : 1;
     A.win();
-    var bonus = '';
-    if (G.mode === 'daily') {
-      var d = today(), prev = store.daily[d] || 0;
-      store.daily[d] = Math.max(prev, stars);
-      if (!prev) { store.streak = { last: d, n: store.streak.last === yesterday() ? store.streak.n + 1 : 1 }; }
-    } else {
-      var before = store.stars[G.level] || 0;
-      if (stars > before) store.stars[G.level] = stars;
-      if (stars === 3 && before < 3 && store.hints < 9) { store.hints++; bonus = ' +1 hint for a perfect clear.'; }
-      if (G.level === store.level) store.level++;
+    var grid = resultGrid([['Score', G.score], ['Time left', fmtTime(G.timeLeft)], ['Best combo', '×' + G.bestCombo], ['Time bonus', '+' + bonus]]);
+    if (G.duel === 'race') {
+      Net.send({ t: 'done', score: G.score });
+      store.wins.online++; save();
+      modal({ title: 'You won the race!', body: grid, actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }] });
+      return;
     }
+    var title = stars === 3 ? 'Flawless' : 'Board cleared';
+    if (G.mode === 'daily') {
+      var d = dayKey(), prev = store.daily[d] || 0;
+      store.daily[d] = Math.max(prev, stars);
+      if (!prev) store.streak = { last: d, n: store.streak.last === dayKey(-1) ? store.streak.n + 1 : 1 };
+      save();
+      modal({ title: title, stars: stars, body: grid, actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Play journey', primary: true, run: function () { startLevel(store.level); } }] });
+      return;
+    }
+    var L = G.level, newBest = G.score > (store.best[L] || 0);
+    if (stars > (store.stars[L] || 0)) store.stars[L] = stars;
+    if (newBest) store.best[L] = G.score;
+    if (L === store.level) store.level++;
     save();
-    var title = G.used < G.par ? 'Beat par!' : stars === 3 ? 'Perfect chain' : G.mode === 'daily' ? 'Daily cleared' : 'Level ' + G.level + ' cleared';
-    var body = G.used + (G.used === 1 ? ' tap' : ' taps') + ' · par ' + G.par + '.' + bonus;
-    if (G.mode === 'daily') body += ' Streak: ' + store.streak.n + (store.streak.n === 1 ? ' day.' : ' days.');
-    var actions = G.mode === 'daily'
-      ? [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Play journey', primary: true, run: function () { startPuzzle(store.level); } }]
-      : [{ label: 'Replay', run: function () { startPuzzle(G.level); } }, { label: 'Next level', primary: true, run: function () { startPuzzle(G.level + 1); } }];
-    modal({ title: title, stars: stars, body: body, actions: actions });
+    if (newBest) title += ' · new best';
+    modal({ title: title, stars: stars, body: grid, actions: [{ label: 'Replay', run: function () { startLevel(L); } }, { label: 'Next level', primary: true, run: function () { startLevel(L + 1); } }] });
   }
 
-  function puzzleFailed() {
-    A.lose();
-    var lit = G.board.litCount(), total = G.board.t.cells.length;
+  function timedFail(reason) {
+    if (G.over) return;
+    G.over = true; A.lose();
+    if (G.duel === 'race') {
+      Net.send({ t: 'out', left: G.left, score: G.score });
+      if (G.rival.out) resolveRace();
+      else modal({ title: reason, body: 'You have ' + G.left + ' tiles left. Waiting to see how your rival does…', actions: [{ label: 'Leave', run: leaveGame }] });
+      return;
+    }
+    var cleared = G.lay.n - G.left;
     modal({
-      title: 'Out of taps',
-      body: lit + ' of ' + total + ' cells lit. ' + (total - lit === 1 ? 'One cell to go.' : (total - lit) + ' cells to go.'),
-      actions: [
-        { label: 'Undo last tap', run: undo },
-        { label: 'Retry', primary: true, run: restartPuzzle }
-      ]
+      title: reason,
+      body: 'You cleared ' + cleared + ' of ' + G.lay.n + ' tiles.',
+      actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Retry', primary: true, run: function () { G.mode === 'daily' ? startDaily() : startLevel(G.level); } }]
     });
   }
 
-  function undo() {
-    if (G.busy || !G.history.length) return;
-    G.board = G.history.pop(); G.used--;
-    view.sync(G.board); view.hint = -1;
-    updatePuzzleHud();
+  function resolveRace() {
+    var me = G.left, them = G.rival.left;
+    var win = me < them || (me === them && G.score > G.rival.score), draw = me === them && G.score === G.rival.score;
+    if (win) { store.wins.online++; save(); A.win(); }
+    modal({
+      title: draw ? 'Dead heat' : win ? 'You win on tiles' : 'Rival wins on tiles',
+      body: resultGrid([['Your tiles left', me], ['Rival tiles left', them], ['Your score', G.score], ['Rival score', G.rival.score]]),
+      actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }]
+    });
   }
 
-  function restartPuzzle() {
-    if (G.busy) return;
-    G.board = G.initial.clone(); G.used = 0; G.history = [];
-    view.setBoard(G.board, 'puzzle');
-    updatePuzzleHud();
+  function useHint() {
+    if (G.over || isTurns()) return;
+    if (G.hints <= 0) { toast('No hints left on this board.'); return; }
+    var pairs = M.freePairs(G.lay, G.present, G.kinds);
+    if (!pairs.length) { toast('No moves left. Shuffle!'); return; }
+    var pick = null, sol = G.gen.solution;
+    for (var k = 0; k < sol.length && !pick; k++) {
+      var a = sol[k][0], b = sol[k][1];
+      if (G.present[a] && G.present[b] && G.kinds[a] === G.kinds[b] && M.isFree(G.lay, G.present, a) && M.isFree(G.lay, G.present, b)) pick = [a, b];
+    }
+    pick = pick || pairs[0];
+    G.hints--; G.usedHint = true;
+    G.timeLeft = Math.max(1000, G.timeLeft - HINT_COST_MS);
+    board.showHint(pick, 3500);
+    toast('Hint used: −10 seconds', 1500);
+    updateTimedHud();
   }
 
-  function hint() {
-    if (G.busy) return;
-    if (store.hints <= 0) { toast('No hints left. Every new 3 ★ clear earns one.'); return; }
-    var left = G.limit - G.used;
-    var sol = left > 0 ? E.solvePuzzle(G.board, left, 12) : null;
-    if (!sol || !sol.length) { toast('No win from here. Undo or restart.'); return; }
-    view.hint = sol[0]; store.hints--; save();
-    updatePuzzleHud();
+  function useShuffle() {
+    if (G.over || isTurns()) return;
+    if (G.shuffles <= 0) { toast('No shuffles left on this board.'); return; }
+    var next = M.reshuffle(G.lay, G.present, G.kinds, Math.random);
+    if (!next) { timedFail('No moves left'); return; }
+    G.kinds = next; board.kinds = next; G.sel = -1; board.sel = -1; board.hint = [];
+    G.gen = Object.assign({}, G.gen, { solution: [] });
+    G.shuffles--; A.shuffle(); board.invalidate();
+    $('btn-shuffle').classList.remove('attention');
+    updateTimedHud();
   }
 
-  // ------------------------------------------------------------- duel
-  var NAMES = ['Cyan', 'Rose'];
-
-  function startVersus(cfg) {
-    var dims = cfg.size.split('x').map(Number);
-    G = {
-      mode: cfg.mode, busy: false, over: false, size: cfg.size, aiLevel: cfg.aiLevel,
-      first: cfg.first, turn: cfg.first, moves: 0, me: cfg.me, queue: [],
-      board: new E.Board(new E.Topology(dims[0], dims[1]))
-    };
-    G.names = cfg.mode === 'local' ? NAMES.slice()
-      : cfg.mode === 'ai' ? ['You', 'Nova AI']
-      : cfg.me === 0 ? ['You', 'Rival'] : ['Rival', 'You'];
-    $('game-title').textContent = cfg.mode === 'online' ? 'Room ' + Net.code : cfg.mode === 'ai' ? 'Vs Nova AI · ' + ['Easy', 'Normal', 'Hard'][cfg.aiLevel] : 'Pass & play';
-    $('hud-puzzle').hidden = true; $('hud-versus').hidden = false;
-    $('btn-undo').hidden = true; $('btn-hint').hidden = true; $('btn-restart').hidden = cfg.mode === 'online';
-    $('emotes').hidden = cfg.mode !== 'online';
-    $('goal').hidden = cfg.mode === 'online';
-    $('goal').textContent = 'Tap an empty cell or one of yours. Capture every enemy orb to win.';
+  // ------------------------------------------------------------- take-turns duel
+  function startTurns(cfg) {
+    var gen = M.generateDuel(cfg.seed, cfg.size);
+    G = baseState(gen);
+    Object.assign(G, cfg, { duel: 'turns', turn: cfg.first, scores: [0, 0], moveNo: 0, reshuffles: 0, turnEnd: performance.now() + TURN_MS });
+    G.names = cfg.mode === 'local' ? ['Jade', 'Ember'] : cfg.mode === 'ai' ? ['You', 'Computer'] : cfg.me === 0 ? ['You', 'Rival'] : ['Rival', 'You'];
+    $('game-title').textContent = cfg.mode === 'online' ? 'Room ' + Net.code : cfg.mode === 'ai' ? 'Vs computer · ' + ['Easy', 'Normal', 'Hard'][cfg.aiLevel] : 'Pass & play';
+    $('hud-solo').hidden = true; $('hud-duel').hidden = false;
+    $('btn-hint').hidden = true; $('btn-shuffle').hidden = true;
+    $('emotes').hidden = cfg.mode !== 'online'; $('goal').hidden = cfg.mode === 'online';
+    $('goal').textContent = 'One match per turn, 15 seconds each. Winds and dragons score 2.';
     $('pname-0').textContent = G.names[0]; $('pname-1').textContent = G.names[1];
-    show('game');
-    view.setBoard(G.board, 'versus');
-    view.turn = G.turn;
-    updateVersusHud();
+    mountBoard(true);
+    updateDuelHud();
     maybeAi();
   }
 
-  function updateVersusHud() {
-    $('pcount-0').textContent = G.board.count(0);
-    $('pcount-1').textContent = G.board.count(1);
+  function updateDuelHud() {
+    $('pscore-0').textContent = G.scores[0]; $('pscore-1').textContent = G.scores[1];
     $('chip-0').classList.toggle('active', G.turn === 0 && !G.over);
     $('chip-1').classList.toggle('active', G.turn === 1 && !G.over);
+    $('turn-fill').parentNode.className = 'turn-clock p' + G.turn;
     var who = G.names[G.turn];
-    $('turn-note').textContent = G.over ? 'Game over' : who === 'You' ? 'Your move' : who + (G.mode === 'local' ? ' to move' : ' is thinking…');
+    $('turn-note').textContent = G.over ? 'Game over' : who === 'You' ? 'Your turn' : G.mode === 'local' ? who + '’s turn' : who + ' is thinking…';
+    board.accent = COLORS[G.turn];
+    board.invalidate();
   }
 
-  function versusTap(i, remote) {
-    if (G.over) return;
-    if (G.busy) return;
-    var p = G.turn;
-    if (!remote && G.mode !== 'local' && p !== G.me) { toast('Wait for your turn.', 1200); return; }
-    if (G.board.o[i] !== -1 && G.board.o[i] !== p) { A.invalid(); view.shake = 5; return; }
-    if (G.mode === 'online' && !remote) Net.send({ t: 'move', i: i, k: G.moves });
-    G.busy = true;
-    A.place();
-    var b = G.board, oppMoved = G.moves >= 1;
-    var sim = simulate(b, i, p, oppMoved ? function () { return b.count(1 - p) === 0; } : null);
-    view.play(i, p, sim.start, sim.frames, hooks).then(function () {
-      G.moves++;
-      if (G.moves >= 2 && b.count(1 - p) === 0) { G.busy = false; versusOver(p); return; }
-      G.turn = 1 - p; view.turn = G.turn;
-      G.busy = false;
-      updateVersusHud();
-      maybeAi();
-      drainRemote();
+  function tickTurns(now) {
+    if (!isTurns() || G.over) return;
+    var rem = G.turnEnd - now;
+    $('turn-fill').style.width = Math.max(0, 100 * rem / TURN_MS) + '%';
+    if (rem > 0) return;
+    if (G.mode === 'online') {
+      if (G.turn !== G.me) return; // the active player's device decides when time is up
+      Net.send({ t: 'pass', k: G.moveNo });
+    }
+    passTurn();
+  }
+
+  function passTurn() {
+    toast(G.names[G.turn] === 'You' ? 'Time’s up. Turn passed.' : G.names[G.turn] + ' ran out of time.', 1500);
+    G.sel = -1; board.sel = -1; G.moveNo++;
+    nextTurn();
+  }
+
+  function nextTurn() {
+    G.turn = 1 - G.turn; G.turnEnd = performance.now() + TURN_MS;
+    updateDuelHud();
+    maybeAi();
+  }
+
+  function turnsMatch(a, b, remote) {
+    var kind = G.kinds[a], pts = M.points(kind), p = G.turn;
+    if (G.mode === 'online' && !remote) Net.send({ t: 'match', a: a, b: b, k: G.moveNo });
+    G.scores[p] += pts; G.moveNo++;
+    var mp = midpoint(a, b);
+    floatText('+' + pts, mp[0], mp[1], pts > 1, COLORS[p]);
+    A.match(pts);
+    if (G.left === 0) { turnsOver(); return; }
+    if (!M.freePairs(G.lay, G.present, G.kinds).length) {
+      var next = M.reshuffle(G.lay, G.present, G.kinds, M.mulberry32(M.hash(G.seed, 'reshuffle', G.reshuffles++)));
+      if (!next) { turnsOver(); return; }
+      G.kinds = next; board.kinds = next; A.shuffle();
+      toast('No moves left. The board was reshuffled.');
+    }
+    nextTurn();
+  }
+
+  function turnsOver() {
+    G.over = true; updateDuelHud();
+    var s = G.scores, winner = s[0] === s[1] ? -1 : s[0] > s[1] ? 0 : 1;
+    var title = winner < 0 ? 'Draw' : G.mode === 'local' ? G.names[winner] + ' wins!' : winner === G.me ? 'You win!' : G.names[winner] + ' wins';
+    if (winner === G.me || G.mode === 'local') A.win(); else A.lose();
+    if (winner === G.me && G.mode === 'ai') store.wins.ai++;
+    if (winner === G.me && G.mode === 'online') store.wins.online++;
+    save();
+    modal({
+      title: title,
+      body: resultGrid([[G.names[0], s[0] + ' pts'], [G.names[1], s[1] + ' pts']]),
+      actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }]
     });
-    updateVersusHud();
   }
 
   function maybeAi() {
     if (G.mode !== 'ai' || G.over || G.turn === G.me) return;
-    var token = G;
+    var token = G, delay = [2200, 1500, 1000][G.aiLevel] + Math.random() * 900;
     setTimeout(function () {
-      if (G !== token || G.over || G.busy) return;
-      var i = E.aiMove(G.board, G.turn, G.aiLevel, G.moves >= 1);
-      versusTap(i, true);
-    }, 380 + Math.random() * 300);
+      if (G !== token || G.over || G.turn === G.me) return;
+      var pr = M.aiPick(G.lay, G.present, G.kinds, G.aiLevel);
+      if (!pr) { passTurn(); return; }
+      G.sel = pr[0]; board.sel = pr[0]; board.invalidate(); A.select();
+      setTimeout(function () { if (G === token && !G.over) applyMatch(pr[0], pr[1], true); }, 450);
+    }, delay);
   }
 
-  function drainRemote() {
-    if (G.mode !== 'online' || G.busy || G.over || !G.queue.length) return;
-    var m = G.queue.shift();
-    if (m.k === G.moves && G.turn !== G.me) versusTap(m.i, true);
+  // ------------------------------------------------------------- input
+  function applyMatch(a, b, remote) {
+    G.present[a] = 0; G.present[b] = 0; G.left -= 2;
+    G.sel = -1; board.sel = -1;
+    board.matched(a, b, isTurns() ? COLORS[G.turn] : '#e8b64c');
+    if (isTurns()) turnsMatch(a, b, remote); else timedMatch(a, b);
   }
 
-  function versusOver(winner) {
-    G.over = true;
-    updateVersusHud();
-    var mine = G.mode === 'local' || winner === G.me;
-    if (mine) A.win(); else A.lose();
-    if (G.mode === 'ai' && winner === G.me) { store.wins.ai++; save(); }
-    if (G.mode === 'online' && winner === G.me) { store.wins.online++; save(); }
-    var title = G.mode === 'local' ? G.names[winner] + ' wins!' : winner === G.me ? 'You win!' : G.names[winner] + ' wins';
-    modal({
-      title: title,
-      body: 'Every enemy orb captured in ' + G.moves + ' moves.',
-      actions: [
-        { label: 'Menu', run: leaveGame },
-        { label: 'Rematch', primary: true, run: rematch }
-      ]
-    });
+  function onTileTap(i) {
+    if (G.over || !G.lay) return;
+    if (isTurns() && G.mode !== 'local' && G.turn !== G.me) { toast('Wait for your turn.', 1100); return; }
+    if (!M.isFree(G.lay, G.present, i)) { A.blocked(); board.wrong(i); return; }
+    if (G.sel === i) { G.sel = -1; board.sel = -1; board.invalidate(); return; }
+    if (G.sel >= 0 && G.kinds[G.sel] === G.kinds[i]) { applyMatch(G.sel, i, false); return; }
+    G.sel = i; board.sel = i; board.invalidate(); A.select();
   }
 
   function rematch() {
     if (G.mode === 'online') {
       if (!Net.conn) { toast('Your rival has left the room.'); return; }
-      if (Net.isHost) hostStartRound(); else { Net.send({ t: 'rematch' }); toast('Rematch requested. Waiting for host…'); }
+      if (Net.isHost) hostStart(); else { Net.send({ t: 'rematch' }); toast('Rematch requested. Waiting for the host…'); }
       return;
     }
-    startVersus({ mode: G.mode, size: G.size, aiLevel: G.aiLevel, me: G.me, first: 1 - G.first });
+    startTurns({ mode: G.mode, size: G.size, aiLevel: G.aiLevel, me: 0, first: 1 - G.first, seed: Math.floor(Math.random() * 1e9) });
   }
 
   function leaveGame() {
-    if (G.mode === 'online') { Net.close(); G.mode = null; }
+    if (G.mode === 'online') Net.close();
+    G = { mode: null };
     show('home');
   }
 
   // ------------------------------------------------------------- online
-  var lobbySize = store.size || '6x9';
+  var lobby = { duel: store.duel, size: store.size };
+  var DUEL_DESC = {
+    race: 'Same board for both of you, side by side. First to clear it wins.',
+    turns: 'One shared board. Take turns making one match each. Highest score wins.'
+  };
   function onlineSupported() { return Net.available() && typeof RTCPeerConnection === 'function'; }
-
-  function setLobbyStatus(msg, isError) {
-    var s = $('lobby-status');
-    s.textContent = msg; s.classList.toggle('error', !!isError);
+  function setLobbyStatus(msg, isError) { var s = $('lobby-status'); s.textContent = msg; s.classList.toggle('error', !!isError); }
+  function syncLobbyChips() {
+    document.querySelectorAll('#pick-duel .chip').forEach(function (c) { c.setAttribute('aria-checked', String(c.dataset.v === lobby.duel)); });
+    document.querySelectorAll('#pick-size .chip').forEach(function (c) { c.setAttribute('aria-checked', String(c.dataset.v === lobby.size)); });
+    $('duel-desc').textContent = DUEL_DESC[lobby.duel];
   }
-
   function openLobby() {
-    show('lobby');
-    $('host-box').hidden = true;
-    document.querySelectorAll('#lobby .size-pick .chip').forEach(function (c) { c.setAttribute('aria-checked', String(c.dataset.size === lobbySize)); });
+    show('lobby'); $('host-box').hidden = true; syncLobbyChips();
     if (!onlineSupported()) setLobbyStatus('Online play is not available here. Open the game from its own web address with an internet connection.', true);
     else setLobbyStatus('');
   }
 
-  function hostStartRound() {
-    var first = G && G.mode === 'online' ? 1 - G.first : (Math.random() < 0.5 ? 0 : 1);
-    Net.send({ t: 'start', size: lobbySize, first: first });
-    closeModal();
-    startVersus({ mode: 'online', size: lobbySize, first: first, me: 0 });
+  function startOnline(m, me) {
+    if (m.duel === 'race') {
+      startTimed(M.generateDuel(m.seed, m.size), { mode: 'online', duel: 'race', me: me, size: m.size, title: 'Race · Room ' + Net.code });
+    } else {
+      startTurns({ mode: 'online', size: m.size, seed: m.seed, first: m.first, me: me });
+    }
+  }
+  function hostStart() {
+    var prevFirst = G && G.mode === 'online' && typeof G.first === 'number' ? G.first : 1;
+    var m = { t: 'start', duel: lobby.duel, size: lobby.size, seed: Math.floor(Math.random() * 1e9), first: 1 - prevFirst };
+    Net.send(m);
+    startOnline(m, 0);
   }
 
   Net.onStatus = function (state, info) {
-    if (state === 'hosting') {
-      $('room-code').textContent = info; $('host-box').hidden = false;
-      setLobbyStatus('Waiting for a friend to join…');
-    } else if (state === 'connecting') {
-      setLobbyStatus('Connecting to room ' + info + '…');
-    } else if (state === 'connected') {
-      setLobbyStatus('Connected!');
-      if (Net.isHost) { G = { mode: null }; hostStartRound(); }
-    } else if (state === 'closed') {
+    if (state === 'hosting') { $('room-code').textContent = info; $('host-box').hidden = false; setLobbyStatus('Waiting for a friend to join…'); }
+    else if (state === 'connecting') setLobbyStatus('Connecting to room ' + info + '…');
+    else if (state === 'connected') { setLobbyStatus('Connected!'); if (Net.isHost) { G = { mode: null }; hostStart(); } }
+    else if (state === 'closed') {
       if (G.mode === 'online' && !$('game').hidden) {
         G.over = true;
         modal({ title: 'Rival left', body: 'The other player disconnected.', actions: [{ label: 'Menu', primary: true, run: leaveGame }] });
       }
-    } else if (state === 'error') {
-      if (!$('lobby').hidden) setLobbyStatus(info, true); else toast(info, 3500);
-    }
+    } else if (state === 'error') { if (!$('lobby').hidden) setLobbyStatus(info, true); else toast(info, 3500); }
   };
 
   Net.onMessage = function (m) {
-    if (m.t === 'start' && !Net.isHost && /^\d+x\d+$/.test(m.size)) {
-      closeModal();
-      startVersus({ mode: 'online', size: m.size, first: m.first ? 1 : 0, me: 1 });
-    } else if (m.t === 'move' && G.mode === 'online' && typeof m.i === 'number') {
-      G.queue.push(m); drainRemote();
-    } else if (m.t === 'rematch' && Net.isHost && G.mode === 'online' && G.over) {
-      hostStartRound();
+    if (m.t === 'start' && !Net.isHost && (m.duel === 'race' || m.duel === 'turns') && (m.size === 'small' || m.size === 'big')) {
+      startOnline(m, 1);
+    } else if (G.mode !== 'online') {
+      return;
+    } else if (m.t === 'match' && isTurns() && !G.over && m.k === G.moveNo && G.turn !== G.me) {
+      var a = m.a, b = m.b;
+      if (G.present[a] && G.present[b] && a !== b && G.kinds[a] === G.kinds[b] && M.isFree(G.lay, G.present, a) && M.isFree(G.lay, G.present, b)) applyMatch(a, b, true);
+    } else if (m.t === 'pass' && isTurns() && !G.over && m.k === G.moveNo && G.turn !== G.me) {
+      passTurn();
+    } else if (m.t === 'prog' && G.duel === 'race') {
+      G.rival.left = m.left | 0; G.rival.score = m.score | 0; updateTimedHud();
+    } else if (m.t === 'done' && G.duel === 'race') {
+      G.rival.done = true; G.rival.left = 0; updateTimedHud();
+      if (!G.won) {
+        G.over = true; A.lose();
+        modal({ title: 'Rival cleared it first', body: 'You had ' + G.left + ' tiles left.', actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }] });
+      }
+    } else if (m.t === 'out' && G.duel === 'race') {
+      G.rival.out = true; G.rival.left = m.left | 0; G.rival.score = m.score | 0; updateTimedHud();
+      if (G.over) resolveRace(); else toast('Your rival is out. Clear the board to win!', 3000);
+    } else if (m.t === 'rematch' && Net.isHost && G.over) {
+      hostStart();
     } else if (m.t === 'emote' && typeof m.e === 'string') {
-      showEmote(m.e.slice(0, 4), 'rival');
-    } else if (m.t === 'full') {
-      setLobbyStatus('That room already has two players.', true);
+      showEmote(m.e.slice(0, 4), false);
     }
   };
 
-  function showEmote(e, who) {
-    var el = document.createElement('div');
-    el.className = 'emote-bubble'; el.textContent = e;
-    el.style.left = who === 'me' ? '30%' : '70%';
-    el.style.color = (who === 'me') === (G.me === 0) ? 'var(--cyan)' : 'var(--rose)';
-    $('emote-layer').appendChild(el);
-    setTimeout(function () { el.remove(); }, 1700);
+  function showEmote(e, mine) {
+    var w = $('board-wrap').getBoundingClientRect();
+    floatText(e, w.width * (mine ? 0.3 : 0.7), w.height * 0.45, true, mine ? COLORS[G.me || 0] : COLORS[1 - (G.me || 0)]);
     A.pop();
   }
-
   function copyText(text, label) {
     var done = function () { toast(label + ' copied'); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { toast(text, 4000); });
@@ -409,82 +500,68 @@
   }
 
   // ------------------------------------------------------------- how to play
-  function howTo() {
+  function howTo(after) {
     var ol = document.createElement('ol'); ol.className = 'howto';
     [
-      'Tap a cell to drop an orb into it.',
-      'The pips show how much a cell holds: 2 in a corner, 3 on an edge, 4 in the middle.',
-      'When a cell fills up it bursts, throwing one orb into each neighbour. Bursts trigger more bursts.',
-      'Journey: light up every cell before your taps run out. Match par for 3 ★.',
-      'Duel: tap empty cells or your own. Bursts capture your rival’s cells. Wipe out every enemy orb to win.'
+      'Tap two matching tiles to remove them.',
+      'Only free tiles can be used: nothing on top, and an open left or right side.',
+      'Most kinds have four copies. Pick the wrong pair and you can trap yourself, so look ahead.',
+      'Match within 5 seconds of your last match to build a combo multiplier.',
+      'Beat the clock. Hints cost 10 seconds and shuffles are limited. Later levels stop highlighting free tiles.',
+      'Duels: Race the same board, or take turns on one board (15 seconds a turn, winds and dragons score 2).'
     ].forEach(function (t) { var li = document.createElement('li'); li.textContent = t; ol.appendChild(li); });
-    modal({ title: 'How to play', body: ol, actions: [{ label: 'Got it', primary: true }] });
+    modal({ title: 'How to play', body: ol, actions: [{ label: 'Got it', primary: true, run: after }] });
   }
 
   // ------------------------------------------------------------- wiring
-  $('btn-continue').addEventListener('click', function () { startPuzzle(store.level); });
+  $('btn-continue').addEventListener('click', function () { startLevel(store.level); });
   $('btn-levels').addEventListener('click', function () { show('levels'); renderLevelGrid(); });
-  $('btn-daily').addEventListener('click', function () { startPuzzle(0, true); });
+  $('btn-daily').addEventListener('click', startDaily);
   $('btn-local').addEventListener('click', function () {
     var size = store.size;
     modal({
-      title: 'Pass & play',
-      body: chipGroup('Board', [['5x7', 'Compact 5×7'], ['6x9', 'Classic 6×9']], size, function (v) { size = v; }),
-      actions: [{ label: 'Cancel' }, { label: 'Start duel', primary: true, run: function () { store.size = size; save(); startVersus({ mode: 'local', size: size, first: 0, me: 0 }); } }]
+      title: 'Pass & play', body: chipGroup('Board', [['small', 'Compact'], ['big', 'Grand']], size, function (v) { size = v; }),
+      actions: [{ label: 'Cancel' }, { label: 'Start duel', primary: true, run: function () { store.size = size; save(); startTurns({ mode: 'local', size: size, first: 0, me: 0, seed: Math.floor(Math.random() * 1e9) }); } }]
     });
   });
   $('btn-ai').addEventListener('click', function () {
     var size = store.size, lvl = store.aiLevel, box = document.createElement('div');
     box.style.display = 'grid'; box.style.gap = '14px';
     box.appendChild(chipGroup('Difficulty', [[0, 'Easy'], [1, 'Normal'], [2, 'Hard']], lvl, function (v) { lvl = v; }));
-    box.appendChild(chipGroup('Board', [['5x7', 'Compact 5×7'], ['6x9', 'Classic 6×9']], size, function (v) { size = v; }));
+    box.appendChild(chipGroup('Board', [['small', 'Compact'], ['big', 'Grand']], size, function (v) { size = v; }));
     modal({
-      title: 'Vs Nova AI', body: box,
-      actions: [{ label: 'Cancel' }, { label: 'Start duel', primary: true, run: function () { store.size = size; store.aiLevel = lvl; save(); startVersus({ mode: 'ai', size: size, aiLevel: lvl, first: 0, me: 0 }); } }]
+      title: 'Vs computer', body: box,
+      actions: [{ label: 'Cancel' }, { label: 'Start duel', primary: true, run: function () { store.size = size; store.aiLevel = lvl; save(); startTurns({ mode: 'ai', size: size, aiLevel: lvl, first: 0, me: 0, seed: Math.floor(Math.random() * 1e9) }); } }]
     });
   });
   $('btn-online').addEventListener('click', openLobby);
-  $('btn-howto').addEventListener('click', howTo);
+  $('btn-howto').addEventListener('click', function () { howTo(); });
   $('btn-sound').addEventListener('click', function () { store.sound = !store.sound; A.setEnabled(store.sound); save(); refreshHome(); });
-
   document.querySelectorAll('[data-back]').forEach(function (b) {
     b.addEventListener('click', function () { if (!$('lobby').hidden) Net.close(); show('home'); });
   });
   $('level-grid').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-level]');
-    if (b && !b.disabled) startPuzzle(Number(b.dataset.level));
+    var b = e.target.closest('[data-level]'); if (b && !b.disabled) startLevel(Number(b.dataset.level));
   });
-
   $('btn-quit').addEventListener('click', function () {
-    if (G.mode === 'online' && !G.over) {
-      modal({ title: 'Leave the match?', body: 'Your rival will win by default.', actions: [{ label: 'Stay' }, { label: 'Leave', primary: true, run: leaveGame }] });
-    } else leaveGame();
+    if (G.mode === 'online' && !G.over) modal({ title: 'Leave the match?', body: 'Your rival wins if you leave.', actions: [{ label: 'Stay' }, { label: 'Leave', primary: true, run: leaveGame }] });
+    else leaveGame();
   });
-  $('btn-undo').addEventListener('click', undo);
-  $('btn-hint').addEventListener('click', hint);
-  $('btn-restart').addEventListener('click', function () {
-    if (G.mode === 'puzzle' || G.mode === 'daily') restartPuzzle();
-    else if (!G.busy) startVersus({ mode: G.mode, size: G.size, aiLevel: G.aiLevel, me: G.me, first: G.first });
-  });
-
+  $('btn-hint').addEventListener('click', useHint);
+  $('btn-shuffle').addEventListener('click', useShuffle);
   $('board').addEventListener('pointerdown', function (e) {
     A.unlock();
-    var i = view.cellAt(e.clientX, e.clientY);
-    if (i < 0 || !G.board) return;
-    if (G.mode === 'puzzle' || G.mode === 'daily') puzzleTap(i);
-    else if (G.mode) versusTap(i, false);
+    var i = board.hit(e.clientX, e.clientY);
+    if (i >= 0) onTileTap(i);
   });
-
-  document.querySelectorAll('#lobby .size-pick .chip').forEach(function (c) {
-    c.addEventListener('click', function () {
-      lobbySize = c.dataset.size; store.size = lobbySize; save();
-      document.querySelectorAll('#lobby .size-pick .chip').forEach(function (o) { o.setAttribute('aria-checked', String(o === c)); });
+  ['pick-duel', 'pick-size'].forEach(function (id) {
+    $(id).addEventListener('click', function (e) {
+      var c = e.target.closest('.chip'); if (!c) return;
+      if (id === 'pick-duel') lobby.duel = store.duel = c.dataset.v; else lobby.size = store.size = c.dataset.v;
+      save(); syncLobbyChips();
     });
   });
-  $('btn-host').addEventListener('click', function () {
-    if (!onlineSupported()) return;
-    setLobbyStatus('Creating room…'); Net.host();
-  });
+  $('btn-host').addEventListener('click', function () { if (!onlineSupported()) return; setLobbyStatus('Creating room…'); Net.host(); });
   $('join-form').addEventListener('submit', function (e) {
     e.preventDefault();
     if (!onlineSupported()) return;
@@ -495,77 +572,52 @@
   $('btn-copy-code').addEventListener('click', function () { copyText(Net.code, 'Room code'); });
   $('btn-copy-link').addEventListener('click', function () { copyText(location.origin + location.pathname + '?room=' + Net.code, 'Invite link'); });
   $('emotes').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-emote]');
-    if (!b) return;
-    Net.send({ t: 'emote', e: b.dataset.emote }); showEmote(b.dataset.emote, 'me');
+    var b = e.target.closest('[data-emote]'); if (!b) return;
+    Net.send({ t: 'emote', e: b.dataset.emote }); showEmote(b.dataset.emote, true);
   });
-
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('modal').hidden) closeModal(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('modal').hidden && G.mode !== 'online') closeModal(); });
+  document.addEventListener('visibilitychange', function () { if (G.mode === 'journey' || G.mode === 'daily') G.paused = document.hidden; });
   window.addEventListener('pointerdown', function () { A.unlock(); }, { once: true });
-
-  if (window.ResizeObserver) new ResizeObserver(function () { view.layout(); }).observe($('board-wrap'));
-  else window.addEventListener('resize', function () { view.layout(); });
+  if (window.ResizeObserver) new ResizeObserver(function () { board.resize(); }).observe($('board-wrap'));
+  else window.addEventListener('resize', function () { board.resize(); });
 
   // ------------------------------------------------------------- home demo
-  var demo = new R.BoardView($('demo')), demoState = { n: 0, board: null, sol: [], next: 0, busy: false };
+  var demo = new window.TileBoard($('demo')), D = { n: 0, next: 0 };
   function newDemo() {
-    var g = E.generatePuzzle({ w: 4, h: 4, minT: 1, maxT: 2, walls: 0, fill: 0.6 }, 'demo-' + (demoState.n++ % 12));
-    demoState.board = g.board.clone(); demoState.sol = g.solution; demoState.next = performance.now() + 900;
-    demo.setBoard(demoState.board, 'puzzle');
+    var spec = { cols: 5, rows: 3, layers: 2, carve: 0, stack: 0.7, target: 0 };
+    var g = M.generate(spec, 'demo-' + (D.n++ % 9));
+    D.g = g; D.present = new Uint8Array(g.layout.n).fill(1); D.sol = g.solution.slice(); D.step = 0;
+    demo.set(g.layout, g.kinds, D.present, false);
+    D.next = performance.now() + 1200;
   }
   function stepDemo(now) {
-    if (demoState.busy || now < demoState.next) return;
-    var b = demoState.board;
-    if (b.allLit() || !demoState.sol.length) { newDemo(); return; }
-    var i = demoState.sol.shift();
-    demoState.busy = true;
-    var sim = simulate(b, i, 0, function () { return b.allLit(); });
-    demo.play(i, 0, sim.start, sim.frames).then(function () { demoState.busy = false; demoState.next = performance.now() + (b.allLit() ? 1600 : 900); });
+    if (now < D.next) return;
+    if (!D.sol.length) { newDemo(); return; }
+    var pr = D.sol[0];
+    if (D.step === 0) { demo.sel = pr[0]; demo.invalidate(); D.step = 1; D.next = now + 420; }
+    else { D.present[pr[0]] = 0; D.present[pr[1]] = 0; demo.sel = -1; demo.matched(pr[0], pr[1]); D.sol.shift(); D.step = 0; D.next = now + (D.sol.length ? 650 : 1600); }
   }
 
-  // ------------------------------------------------------------- sky
-  var sky = $('sky'), sg = sky.getContext('2d'), stars = [];
-  function sizeSky() {
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    sky.width = innerWidth * dpr; sky.height = innerHeight * dpr;
-    sg.setTransform(dpr, 0, 0, dpr, 0, 0);
-    stars = [];
-    for (var k = 0; k < Math.round(innerWidth * innerHeight / 9000); k++) stars.push({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: Math.random() * 1.3 + 0.2, p: Math.random() * 6.28, s: 0.4 + Math.random() * 1.2 });
-  }
-  function drawSky(now) {
-    var w = innerWidth, h = innerHeight;
-    sg.fillStyle = '#0c0a1d'; sg.fillRect(0, 0, w, h);
-    var n1 = sg.createRadialGradient(w * 0.15, h * 0.1, 0, w * 0.15, h * 0.1, Math.max(w, h) * 0.6);
-    n1.addColorStop(0, 'rgba(90,60,170,0.30)'); n1.addColorStop(1, 'rgba(90,60,170,0)');
-    sg.fillStyle = n1; sg.fillRect(0, 0, w, h);
-    var n2 = sg.createRadialGradient(w * 0.9, h * 0.95, 0, w * 0.9, h * 0.95, Math.max(w, h) * 0.5);
-    n2.addColorStop(0, 'rgba(255,120,80,0.14)'); n2.addColorStop(1, 'rgba(255,120,80,0)');
-    sg.fillStyle = n2; sg.fillRect(0, 0, w, h);
-    for (var k = 0; k < stars.length; k++) {
-      var s = stars[k], a = 0.35 + 0.35 * Math.sin(s.p + now / 1000 * s.s);
-      sg.fillStyle = 'rgba(239,234,255,' + a + ')';
-      sg.beginPath(); sg.arc(s.x, s.y, s.r, 0, 6.283); sg.fill();
-    }
-  }
-  window.addEventListener('resize', sizeSky);
-  sizeSky();
-
-  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, lastSky = 0;
+  // ------------------------------------------------------------- loop & boot
+  var last = performance.now();
   function loop(now) {
-    if (!reduced || !lastSky) { drawSky(now); lastSky = now; }
+    var dt = Math.min(250, now - last); last = now;
     if (!$('home').hidden) { stepDemo(now); demo.frame(now); }
-    if (!$('game').hidden) view.frame(now);
+    if (!$('game').hidden && G.lay) { tickTimed(dt); tickTurns(now); board.frame(now); }
     requestAnimationFrame(loop);
   }
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('700 24px "Noto Serif SC"', '萬中發東南西北').then(function () { board.clearSprites(); demo.clearSprites(); }, function () {});
+  }
 
-  // ------------------------------------------------------------- boot
+  window.JadeRush = { state: function () { return G; }, board: board }; // read-only hook for automated tests
+
   show('home');
-  demo.layout(); newDemo();
+  demo.resize(); newDemo();
   requestAnimationFrame(loop);
   var room = new URLSearchParams(location.search).get('room');
   if (room && /^[A-Za-z0-9]{5}$/.test(room)) {
-    openLobby();
-    $('join-code').value = room.toUpperCase();
+    openLobby(); $('join-code').value = room.toUpperCase();
     if (onlineSupported()) Net.join(room);
   }
 })();

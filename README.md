@@ -1,24 +1,22 @@
-# Nova Chain
+# Jade Rush
 
-A chain-reaction puzzle with **endless levels** and **two-player duels**, including online play.
-It's plain HTML, CSS and JavaScript, so there's no build step and no server to run.
+A Mahjong tile-matching game with **endless levels**, a clock to beat, and **two-player duels**, including online play.
+It's plain HTML, CSS and JavaScript, with no build step and no server to run.
 
 ## How it plays
 
-Every cell holds a few orbs before it bursts. The pips under each cell show its capacity: 2 in a corner, 3 on an edge, 4 in the middle.
-When a cell fills up it bursts and throws one orb into each neighbour. That can make the neighbours burst too, and a single tap can set off a long chain.
+Tap two matching tiles to remove them. You can only use **free** tiles: nothing stacked on top, and an open left or right side.
+Most kinds have four copies, so taking the wrong pair can bury the tile you need later. Every board is dealt by simulating a full clear, so each one can always be solved, but only if you play it right.
 
 | Mode | Goal |
 | --- | --- |
-| **Journey** | Light up every cell before you run out of taps. Matching par earns 3 ★. Levels are generated from their number, so they never run out, and each one is checked to be solvable. Boards grow and walls appear as you progress. |
-| **Daily spark** | One shared puzzle per calendar day, with a streak counter. |
-| **Duel: Online** | Host a room and send the 5-letter code (or the invite link) to a friend. Play happens peer to peer over WebRTC. You can send emotes during the match. |
-| **Duel: Pass & play** | Two players take turns on one device. |
-| **Duel: Vs Nova AI** | Easy, Normal or Hard (Hard looks two moves ahead). |
+| **Journey** | Clear the board before the clock runs out. Levels are generated from their number, so they never end. Boards get bigger and taller, the clock gets tighter, hints and shuffles get scarcer, and from level 13 free tiles are no longer highlighted. Clear fast without hints for 3 ★. |
+| **Daily board** | One shared board per calendar day, with a streak counter. |
+| **Online: Race** | Both players get the same board. You can see your rival's progress live. First to clear wins; if both run out, fewer tiles left wins. |
+| **Online: Take turns** | One shared board. Each turn you make one match, with 15 seconds per turn. Winds and dragons are worth 2 points. Highest score wins. |
+| **Pass & play / Vs computer** | Take-turns duel on one device, or against an AI (Easy, Normal, Hard). Hard also avoids leaving you high-value pairs. |
 
-In a duel you can tap empty cells or your own. Your bursts capture the cells they spill into. Wipe out every enemy orb to win.
-
-Hooks that keep players coming back: stars and par, hints earned from perfect clears, undo, a daily streak, a pentatonic sound that climbs with each wave of a chain, haptics on mobile, and a live demo on the home screen.
+What keeps it challenging: combo multipliers for matching within 5 seconds, hints that cost 10 seconds, limited shuffles, a time bonus, and per-level best scores.
 
 ## Run it
 
@@ -26,25 +24,26 @@ Hooks that keep players coming back: stars and par, hints earned from perfect cl
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
-To publish it, push to GitHub and turn on **Settings → Pages → Deploy from branch** for this branch. Any static host works too (Netlify, Vercel, Cloudflare Pages).
+To publish it, push to GitHub and turn on **Settings → Pages → Deploy from branch** for this branch. Any static host works too.
 
-Online play uses [PeerJS](https://peerjs.com/) and its free public signaling server. Only moves travel between the players; both browsers run the same deterministic engine.
+Online play uses [PeerJS](https://peerjs.com/) and its free public signaling server. Only moves travel between the players; both browsers build the same board from a shared seed.
 To use your own PeerServer, set `window.NOVA_PEER_OPTIONS = { host, port, path, secure }` before `js/net.js` loads.
 
 ## Code map
 
 | File | Purpose |
 | --- | --- |
-| `js/engine.js` | Rules, wave resolution, level generator and beam-search solver, AI. No DOM, so it also runs in Node. |
-| `js/render.js` | Canvas renderer: tiles, capacity pips, orb sprites, burst waves, particles. |
-| `js/main.js` | Screens, game modes, saved progress (`localStorage`), online protocol, home demo, starfield. |
+| `js/mahjong.js` | Rules, free-tile logic, layout generator, solvable dealing, reshuffle, duel AI. No DOM, so it also runs in Node. |
+| `js/tiles.js` | Tile faces (dots, bamboo, characters, winds, dragons) drawn with canvas. |
+| `js/board.js` | 3D board renderer, hit testing, hints, match effects. |
+| `js/main.js` | Screens, timed play, duels, saved progress (`localStorage`), online protocol, home demo. |
 | `js/net.js` | PeerJS room hosting and joining. |
-| `js/audio.js` | WebAudio synth effects. |
+| `js/audio.js` | WebAudio tile clacks and combo chimes. |
 
 ## Tests
 
 ```bash
-node tests/engine.test.js
+node tests/mahjong.test.js
 ```
 
-The test generates and solves levels 1 to 120, checks that the same level number always produces the same board, and plays AI-vs-AI games to completion.
+The test generates levels 1 to 150 and replays each solution to prove every board is clearable. It also checks determinism and reshuffles, and plays AI duels to the end.
