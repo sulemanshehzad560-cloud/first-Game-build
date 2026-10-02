@@ -47,7 +47,13 @@
     var meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t.bg[0];
     board.setTheme(t); demo.setTheme(t); sky.setTheme(t);
   }
-  function buzz(pattern) { if (store.vibrate && navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) { /* not allowed */ } } }
+  function buzz(pattern) {
+    if (!store.vibrate) return;
+    // Native haptics (iPhone has no navigator.vibrate); stronger patterns map to heavier taps.
+    var total = Array.isArray(pattern) ? pattern.reduce(function (a, b, i) { return i % 2 ? a : a + b; }, 0) : pattern;
+    if (window.NativeShell && window.NativeShell.haptic(total >= 40 ? 'heavy' : total >= 15 ? 'medium' : 'light')) return;
+    if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) { /* not allowed */ } }
+  }
   function hexA(h, a) { var v = parseInt(h.slice(1), 16); return 'rgba(' + (v >> 16 & 255) + ',' + (v >> 8 & 255) + ',' + (v & 255) + ',' + a + ')'; }
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

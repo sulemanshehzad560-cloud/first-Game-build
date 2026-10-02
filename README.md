@@ -31,11 +31,12 @@ To publish it, push to GitHub and turn on **Settings → Pages → Deploy from b
 Online play uses [PeerJS](https://peerjs.com/) (bundled in `vendor/`) and its free public signaling server. Only moves travel between the players; both browsers build the same board from a shared seed.
 To use your own PeerServer, set `window.NOVA_PEER_OPTIONS = { host, port, path, secure }` before `js/net.js` loads.
 
-## Android app
+## Android and iPhone apps
 
 The game ships as an Android app built with [Capacitor](https://capacitorjs.com/) (package `com.sulemanshehzad.jaderush`, target API 36).
 
-* **Builds:** every push runs `.github/workflows/android.yml`. It runs the engine tests and Android lint, builds the debug APK and the release bundle (AAB), tests both on an Android 14 emulator, and attaches everything to a GitHub release. The emulator test drives the game with Playwright: it clears a level, checks pause, a duel, the back button and the logs.
+* **iPhone:** the same game as an iOS app (`ios/`, iOS 15+, iPhone). A macOS job builds it, runs an in-app self-test on the iPhone simulator, and signs and uploads it to TestFlight when App Store Connect secrets are set. Checklist: [`docs/APP_STORE_GUIDE.md`](docs/APP_STORE_GUIDE.md).
+* **Builds:** every push runs `.github/workflows/build.yml`. It runs the engine tests and Android lint, builds the debug APK and the release bundle (AAB), tests both on an Android 14 emulator, and attaches everything to a GitHub release. The emulator test drives the game with Playwright: it clears a level, checks pause, a duel, the back button and the logs.
 * **Ads:** Google AdMob interstitials between boards (`js/ads.js`), with the consent form and an "Ad privacy choices" entry in Settings. Debug builds only request Google's test ads.
 * **Facebook friends:** optional Facebook Login shows which friends play, who is online, and sends duel invites peer to peer (`js/social.js`). It switches on when the build has a Facebook App ID; see [`docs/FACEBOOK_SETUP.md`](docs/FACEBOOK_SETUP.md).
 * **Device reach:** Android 7.0+ (about 99% of active devices), phones, tablets and Chromebooks, a battery saver mode for low-end phones, and an update prompt for outdated WebViews.

@@ -1,7 +1,8 @@
 // Renders launcher icons, splash art, the Play Store icon and feature graphic with Playwright.
-// Usage: node tools/gen-assets.mjs   (needs the playwright package and a Chromium build)
+// Usage: node tools/gen-assets.mjs   (needs the playwright package, a Chromium build and Python Pillow)
 import { createRequire } from 'node:module';
-import { writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
@@ -41,5 +42,13 @@ rmSync(`${res}/drawable/splash.png`, { force: true });
 await shot('icon-full', 512, 512, `${root}/store/icon-512.png`);
 await shot('feature', 1024, 500, `${root}/store/feature-graphic-1024x500.png`);
 await shot('favicon', 192, 192, `${root}/favicon.png`);
+
+// iOS: 1024 App Store icon (must have no alpha channel) and the launch splash.
+const iosAssets = path.join(root, 'ios/App/App/Assets.xcassets');
+await shot('icon-full', 1024, 1024, `${iosAssets}/AppIcon.appiconset/AppIcon-512@2x.png`);
+await shot('splash-full', 2732, 2732, `${iosAssets}/Splash.imageset/splash-2732x2732.png`);
+for (const n of ['1', '2']) writeFileSync(`${iosAssets}/Splash.imageset/splash-2732x2732-${n}.png`, readFileSync(`${iosAssets}/Splash.imageset/splash-2732x2732.png`));
+execSync(`python3 -c "from PIL import Image; p='${iosAssets}/AppIcon.appiconset/AppIcon-512@2x.png'; Image.open(p).convert('RGB').save(p)"`);
+execSync(`python3 -c "from PIL import Image; p='${root}/store/icon-512.png'; Image.open(p).convert('RGB').save(p)"`);
 await browser.close();
 console.log('assets written');

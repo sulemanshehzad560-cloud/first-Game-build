@@ -21,5 +21,16 @@
   },
   "server": {
     "errorPath": "webview-update.html"
+  },
+  "ios": {
+    "backgroundColor": "#0b2621",
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "includePlugins": [
+      "@capacitor-community/admob",
+      "@capacitor/app",
+      "@capacitor/haptics",
+      "@capacitor/status-bar"
+    ]
   }
 }

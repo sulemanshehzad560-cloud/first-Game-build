@@ -1,4 +1,4 @@
-name: Android build
+name: App builds
 
 on:
   push:
@@ -152,9 +152,79 @@ jobs:
           name: emulator-results
           path: e2e-out/
 
+  ios:
+    name: iOS build and simulator test
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Copy web game into the iOS project
+        run: npm ci && npm run build && npx cap sync ios
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build for the iOS simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -40
+
+      - name: Simulator self-test
+        run: bash ci/ios-smoke.sh
+
+      # Runs only when App Store Connect API key secrets are configured (see docs/APP_STORE_GUIDE.md).
+      - name: Signed archive, .ipa and TestFlight upload
+        if: env.ASC_KEY_ID != ''
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          ADMOB_IOS_APP_ID: ${{ vars.ADMOB_IOS_APP_ID }}
+          ADMOB_IOS_INTERSTITIAL_ID: ${{ vars.ADMOB_IOS_INTERSTITIAL_ID }}
+        run: |
+          set -eo pipefail
+          CODE=$((100 + GITHUB_RUN_NUMBER))
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"; mkdir -p "$KEY_DIR"
+          printf '%s' "$ASC_KEY_P8" > "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          ADS=()
+          [ -n "$ADMOB_IOS_APP_ID" ] && ADS+=(ADMOB_IOS_APP_ID="$ADMOB_IOS_APP_ID")
+          [ -n "$ADMOB_IOS_INTERSTITIAL_ID" ] && ADS+=(ADMOB_IOS_INTERSTITIAL_ID="$ADMOB_IOS_INTERSTITIAL_ID")
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/JadeRush.xcarchive archive "${AUTH[@]}" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION="$CODE" MARKETING_VERSION="$VERSION_NAME" "${ADS[@]}" 2>&1 | tail -30
+          sed "s/TEAM_ID_PLACEHOLDER/$APPLE_TEAM_ID/" ci/ios-export.plist > build/export.plist
+          xcodebuild -exportArchive -archivePath build/JadeRush.xcarchive -exportPath build/ipa -exportOptionsPlist build/export.plist "${AUTH[@]}" 2>&1 | tail -20
+          mkdir -p ios-out && cp build/ipa/*.ipa "ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
+          xcrun altool --upload-app -f "ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
+          echo "PASS signed build ${CODE} uploaded to App Store Connect (TestFlight)" | tee -a ios-out/report.txt
+
+      - name: Zip the simulator app
+        if: always()
+        run: |
+          mkdir -p ios-out
+          APP=$(find build/ios/Build/Products -maxdepth 2 -name App.app -path '*iphonesimulator*' | head -1)
+          [ -n "$APP" ] && (cd "$(dirname "$APP")" && zip -q -r "$GITHUB_WORKSPACE/ios-out/jade-rush-simulator.app.zip" App.app) || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-results
+          path: ios-out/
+
   release:
     name: Publish GitHub release
-    needs: [build, emulator]
+    needs: [build, emulator, ios]
     if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -169,12 +239,24 @@ jobs:
           name: emulator-results
           path: e2e
 
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: ios-results
+          path: ios
+
       - name: Release notes
         env:
           CODE: ${{ needs.build.outputs.code }}
           TESTS: ${{ needs.emulator.result }}
+          IOS: ${{ needs.ios.result }}
         run: |
           if [ -d e2e ]; then (cd e2e && zip -q -r ../dist/emulator-test-results.zip .); fi
+          if [ -d ios ]; then
+            mv ios/*.ipa dist/ 2>/dev/null || true
+            mv ios/jade-rush-simulator.app.zip dist/ 2>/dev/null || true
+            (cd ios && zip -q -r ../dist/ios-test-results.zip .)
+          fi
           {
             echo "Jade Rush ${VERSION_NAME} (version code ${CODE})"
             echo
@@ -184,6 +266,9 @@ jobs:
             echo
             echo "Emulator tests: ${TESTS}"
             if [ -f e2e/report.txt ]; then echo; echo '```'; cat e2e/report.txt; echo '```'; fi
+            echo
+            echo "iOS simulator tests: ${IOS}"
+            if [ -f ios/report.txt ]; then echo; echo '```'; cat ios/report.txt; echo '```'; fi
           } > dist/RELEASE-NOTES.md
           cat dist/RELEASE-NOTES.md
 

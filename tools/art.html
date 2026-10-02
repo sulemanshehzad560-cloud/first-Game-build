@@ -51,6 +51,13 @@ window.render = async function (mode, size, h) {
     g.fillText('Duel your friends online.', W * 0.065, H * 0.72);
     return;
   }
+  if (mode === 'splash-full') {
+    table(g, W, H);
+    const pb = tileBoard(c, W * 0.1, 1);
+    tile(pb, g, W / 2 - pb.fw * 0.36, H / 2 + pb.fh * 0.02, 32, -0.2, 3);
+    tile(pb, g, W / 2 + pb.fw * 0.3, H / 2 - pb.fh * 0.04, 31, 0.12, 1);
+    return;
+  }
   const full = mode === 'icon-full' || mode === 'favicon';
   if (full) table(g, W, H);
   // Adaptive icons keep art inside the central 66/108 safe zone.

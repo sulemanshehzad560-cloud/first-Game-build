@@ -5,7 +5,7 @@
   var isNative = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
   function plugin(name) { try { return isNative ? Cap.registerPlugin(name) : null; } catch (e) { return null; } }
 
-  var App = plugin('App'), StatusBar = plugin('StatusBar'), BuildInfo = plugin('BuildInfo');
+  var App = plugin('App'), StatusBar = plugin('StatusBar'), BuildInfo = plugin('BuildInfo'), Haptics = plugin('Haptics');
   var info = null;
 
   global.NativeShell = {
@@ -13,7 +13,7 @@
     /** Build facts from the native side: { debug, facebook }. */
     buildInfo: function () {
       if (!isNative || !BuildInfo) return Promise.resolve({ debug: !isNative, facebook: false });
-      if (!info) info = BuildInfo.isDebug().then(function (r) { return { debug: !!(r && r.debug), facebook: !!(r && r.facebook) }; }, function () { return { debug: false, facebook: false }; });
+      if (!info) info = BuildInfo.isDebug().then(function (r) { r = r || {}; return { debug: !!r.debug, facebook: !!r.facebook, platform: r.platform || 'android', interstitialId: r.interstitialId || '', selfTest: !!r.selfTest }; }, function () { return { debug: false, facebook: false, platform: '', interstitialId: '' }; });
       return info;
     },
     /** Resolves true for debug builds (test ads), false for release builds. */
@@ -26,6 +26,12 @@
     onBack: function (handler) {
       if (!App) return;
       App.addListener('backButton', function () { if (!handler()) App.exitApp(); });
+    },
+    /** Native haptic tap: 'light' | 'medium' | 'heavy'. Returns false when unavailable. */
+    haptic: function (strength) {
+      if (!Haptics) return false;
+      Haptics.impact({ style: strength === 'heavy' ? 'HEAVY' : strength === 'medium' ? 'MEDIUM' : 'LIGHT' }).catch(function () {});
+      return true;
     },
     onPause: function (fn) { if (App) App.addListener('pause', fn); },
     onResume: function (fn) { if (App) App.addListener('resume', fn); },
