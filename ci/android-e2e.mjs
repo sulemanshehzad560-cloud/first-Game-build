@@ -17,9 +17,12 @@ const adb = cmd => execSync('adb ' + cmd, { maxBuffer: 64 * 1024 * 1024 }).toStr
 const [device] = await android.devices();
 console.log('Device:', device.model(), device.serial());
 await device.shell(`pm uninstall ${PKG}`).catch(() => {});
+console.log('… installing', APK);
 await device.installApk(APK);
 adb('logcat -c');
+console.log('… launching');
 await device.shell(`am start -W -n ${PKG}/.MainActivity`);
+console.log('… launched');
 
 let page;
 const errors = [];
@@ -30,16 +33,20 @@ async function connect() {
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
 }
+// Each step gets two minutes; a stalled WebView or emulator fails the step instead of hanging the job.
 async function step(name, fn) {
-  try { await fn(); }
+  console.log('… ' + name);
+  let timer;
+  const limit = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('step timed out after 120 s')), 120000); });
+  try { await Promise.race([fn(), limit]); }
   catch (e) {
     log(false, name + ' threw: ' + String(e.message || e).split('\n')[0]);
     const pid = (await device.shell(`pidof ${PKG}`).catch(() => Buffer.from(''))).toString().trim();
     console.log('   app pid after failure: ' + (pid || 'none'));
     const tail = adb('logcat -d -t 400').split('\n').filter(l => /chromium|crash|FATAL|AndroidRuntime|Capacitor|jaderush|lowmemorykiller|Renderer/i.test(l)).slice(-40);
     console.log('   logcat:\n   ' + tail.join('\n   '));
-    try { if (!pid) { await device.shell(`am start -W -n ${PKG}/.MainActivity`); } await connect(); } catch (e2) { console.log('   reconnect failed: ' + e2.message); }
-  }
+    try { if (!pid) { await device.shell(`am start -W -n ${PKG}/.MainActivity`); } await Promise.race([connect(), new Promise((_, r) => setTimeout(() => r(new Error('reconnect timed out')), 90000))]); } catch (e2) { console.log('   reconnect failed: ' + e2.message); }
+  } finally { clearTimeout(timer); }
 }
 const shot = async name => { try { writeFileSync(`${OUT}/${name}.png`, await device.screenshot()); } catch (e) { /* ignore */ } };
 const tap = i => page.evaluate(i => {
