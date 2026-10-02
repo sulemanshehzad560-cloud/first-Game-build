@@ -133,8 +133,10 @@ await step('vs computer', async () => {
 await step('tile sets and back button', async () => {
   await page.evaluate(() => document.getElementById('btn-themes').click());
   await sleep(900); await shot('08-tile-sets');
-  await device.shell('input keyevent 4'); await sleep(900);
-  log(await page.evaluate(() => document.getElementById('modal').hidden), 'Back button closes dialogs');
+  await device.shell('input keyevent 4');
+  // the emulator renders in software, so give the dialog up to five seconds to go
+  const closed = await page.waitForFunction(() => document.getElementById('modal').hidden, null, { timeout: 5000 }).then(() => true, () => false);
+  log(closed, 'Back button closes dialogs');
 });
 
 await step('background and resume', async () => {

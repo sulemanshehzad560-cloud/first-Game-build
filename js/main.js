@@ -22,6 +22,7 @@
   // Battery saver: automatic on phones with 2 GB of RAM or less (or 2 cores), or switched on in Settings.
   function autoLite() { return (navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2); }
   window.JadeLite = store.lite == null ? !!autoLite() : !!store.lite;
+  document.documentElement.classList.toggle('lite', window.JadeLite);
 
   // ------------------------------------------------------------- tile sets, juice
   var THEMES = window.MahjongTiles.THEMES;
@@ -1020,7 +1021,7 @@
     box.appendChild(toggleRow('Sound effects', store.sound, function (v) { store.sound = v; A.setEnabled(v); save(); if (v) A.select(); }));
     box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }));
     box.appendChild(toggleRow('Battery saver (fewer effects)', window.JadeLite, function (v) {
-      store.lite = v; window.JadeLite = v; save(); board.resize(); demo.resize(); sky.resize();
+      store.lite = v; window.JadeLite = v; document.documentElement.classList.toggle('lite', v); save(); board.resize(); demo.resize(); sky.resize();
     }));
     box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(); }));
     box.appendChild(linkRow('How to play', function () { closeModal(); howTo(after); }));
