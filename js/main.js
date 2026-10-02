@@ -26,6 +26,8 @@
   // ------------------------------------------------------------- tile sets, juice
   var THEMES = window.MahjongTiles.THEMES;
   var MAX = M.MAX_LEVEL;
+  // Drawn rather than a text glyph: Android's system font has no '❚'.
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></svg>';
   var fmt = function (n) { return n.toLocaleString('en-US'); };
   function currentTheme() {
     var t = THEMES.filter(function (x) { return x.id === store.theme; })[0];
@@ -398,7 +400,7 @@
     if (cfg.mode === 'journey') setTitle(cfg.title, 'of ' + fmt(MAX), null);
     else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : 'Race', null);
     var pausable = cfg.mode !== 'online';
-    $('btn-quit').textContent = pausable ? '❚❚' : '←'; $('btn-quit').setAttribute('aria-label', pausable ? 'Pause' : 'Leave race');
+    $('btn-quit').innerHTML = pausable ? PAUSE_ICON : '←'; $('btn-quit').setAttribute('aria-label', pausable ? 'Pause' : 'Leave race');
     G.shownScore = 0; setHeat(0); $('score').textContent = '0'; $('combo-bar').style.width = '0';
     $('hud-solo').hidden = false; $('hud-duel').hidden = true;
     $('rival').hidden = cfg.duel !== 'race';
@@ -585,7 +587,7 @@
     Object.assign(G, cfg, { duel: 'turns', turn: cfg.first, scores: [0, 0], moveNo: 0, reshuffles: 0, turnEnd: performance.now() + TURN_MS });
     G.names = cfg.mode === 'local' ? ['Jade', 'Ember'] : cfg.mode === 'ai' ? ['You', 'Computer'] : cfg.me === 0 ? ['You', 'Rival'] : ['Rival', 'You'];
     setTitle(cfg.mode === 'online' ? matchLabel() : cfg.mode === 'ai' ? 'Vs computer' : 'Pass & play', cfg.mode === 'ai' ? ['Easy', 'Normal', 'Hard'][cfg.aiLevel] : 'Take turns', null);
-    $('btn-quit').textContent = cfg.mode === 'online' ? '←' : '❚❚'; $('btn-quit').setAttribute('aria-label', cfg.mode === 'online' ? 'Leave match' : 'Pause');
+    $('btn-quit').innerHTML = cfg.mode === 'online' ? '←' : PAUSE_ICON; $('btn-quit').setAttribute('aria-label', cfg.mode === 'online' ? 'Leave match' : 'Pause');
     $('hud-solo').hidden = true; $('hud-duel').hidden = false;
     $('btn-hint').hidden = true; $('btn-shuffle').hidden = true;
     $('emotes').hidden = cfg.mode !== 'online'; $('goal').hidden = cfg.mode === 'online';
