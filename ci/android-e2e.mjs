@@ -12,7 +12,8 @@ mkdirSync(OUT, { recursive: true });
 const report = [];
 const log = (ok, msg) => { report.push((ok ? 'PASS ' : 'FAIL ') + msg); console.log((ok ? '✅ ' : '❌ ') + msg); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const adb = cmd => execSync('adb ' + cmd, { maxBuffer: 64 * 1024 * 1024 }).toString();
+// Bounded: if the emulator itself dies, adb would otherwise wait forever.
+const adb = cmd => { try { return execSync('adb ' + cmd, { maxBuffer: 64 * 1024 * 1024, timeout: 30000 }).toString(); } catch (e) { return 'adb ' + cmd + ' failed: ' + e.message.split('\n')[0]; } };
 
 const [device] = await android.devices();
 console.log('Device:', device.model(), device.serial());
