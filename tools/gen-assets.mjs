@@ -46,8 +46,18 @@ await shot('favicon', 192, 192, `${root}/favicon.png`);
 // iOS: 1024 App Store icon (must have no alpha channel) and the launch splash.
 const iosAssets = path.join(root, 'ios/App/App/Assets.xcassets');
 await shot('icon-full', 1024, 1024, `${iosAssets}/AppIcon.appiconset/AppIcon-512@2x.png`);
-await shot('splash-full', 2732, 2732, `${iosAssets}/Splash.imageset/splash-2732x2732.png`);
-for (const n of ['1', '2']) writeFileSync(`${iosAssets}/Splash.imageset/splash-2732x2732-${n}.png`, readFileSync(`${iosAssets}/Splash.imageset/splash-2732x2732.png`));
+// Launch image: a portrait crop of the square splash at 1x/2x/3x. iOS refuses launch images that
+// decode to more than 25 MB, which a 2732x2732 RGBA square exceeds.
+const splashDir = `${iosAssets}/Splash.imageset`;
+await shot('splash-full', 2732, 2732, `${splashDir}/square.png`);
+execSync(`python3 -c "
+from PIL import Image
+im = Image.open('${splashDir}/square.png').convert('RGB')
+x = (2732 - 1260) // 2
+im = im.crop((x, 0, x + 1260, 2732))
+for s in (1, 2, 3): im.resize((420 * s, 911 * s), Image.LANCZOS).save('${splashDir}/splash@%dx.png' % s, optimize=True)
+"`);
+rmSync(`${splashDir}/square.png`);
 execSync(`python3 -c "from PIL import Image; p='${iosAssets}/AppIcon.appiconset/AppIcon-512@2x.png'; Image.open(p).convert('RGB').save(p)"`);
 execSync(`python3 -c "from PIL import Image; p='${root}/store/icon-512.png'; Image.open(p).convert('RGB').save(p)"`);
 await browser.close();
