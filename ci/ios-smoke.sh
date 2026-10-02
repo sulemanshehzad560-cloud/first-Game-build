@@ -48,7 +48,10 @@ if [ "$launched" != 1 ]; then
 fi
 
 shots=0
-for i in $(seq 1 120); do
+# Time-based budget: screenshots on the hosted simulator can take many seconds each.
+START=$SECONDS
+for i in $(seq 1 900); do
+  [ $((SECONDS - START)) -ge 600 ] && break
   sleep 1
   for name in $(grep -o 'SELFTEST SHOT [a-z]*' "$OUT/stdout.txt" 2>/dev/null | awk '{print $3}'); do
     [ -f "$OUT/ios-$name.png" ] || { xcrun simctl io "$UDID" screenshot "$OUT/ios-$name.png" > /dev/null 2>&1; shots=$((shots+1)); }
@@ -58,7 +61,10 @@ for i in $(seq 1 120); do
 done
 
 grep -o 'SELFTEST \(PASS\|FAIL\|DONE\).*' "$OUT/stdout.txt" | sed 's/^SELFTEST //' | tee -a "$OUT/report.txt"
-grep -i '\[error\]' "$OUT/stdout.txt" | grep -v 'Publisher misconfiguration' | head -20 > "$OUT/js-errors.txt" || true
+# UMP reports these until a GDPR message is published in AdMob (Privacy & messaging); not an app error.
+UMP='Publisher misconfiguration|Request consent info failed'
+grep -qiE "$UMP" "$OUT/stdout.txt" && echo "NOTE AdMob consent message not set up in the AdMob account yet (Privacy & messaging)" | tee -a "$OUT/report.txt"
+grep -i '\[error\]' "$OUT/stdout.txt" | grep -viE "$UMP" | head -20 > "$OUT/js-errors.txt" || true
 xcrun simctl spawn "$UDID" log show --last 5m --style compact --predicate 'process == "App"' > "$OUT/system-log.txt" 2>/dev/null || true
 CRASHES=$(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i '^App[-_.]' || true)
 

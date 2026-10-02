@@ -18,6 +18,17 @@ sleep 20
 adb exec-out screencap -p > "$OUT/10-release-home.png"
 PID=$(adb shell pidof "$PKG" || true)
 adb logcat -d > "$OUT/logcat-release.txt"
+# Play services on the emulator sometimes restarts right after an install; Android then kills every app
+# holding its font provider. That is the emulator, not the app: note it and launch once more.
+if [ -z "$PID" ] && grep -qE "Killing [0-9]+:$PKG/.*dying proc com\.google\.android\.gms" "$OUT/logcat-release.txt"; then
+  echo "NOTE Play services restarted and took the app down with it; relaunching once" | tee -a "$OUT/report.txt"
+  adb logcat -c
+  adb shell am start -W -n "$PKG/.MainActivity"
+  sleep 20
+  adb exec-out screencap -p > "$OUT/10-release-home.png"
+  PID=$(adb shell pidof "$PKG" || true)
+  adb logcat -d >> "$OUT/logcat-release.txt"
+fi
 if [ -z "$PID" ]; then echo "FAIL release app is not running" | tee -a "$OUT/report.txt"; exit 1; fi
 if grep -E "FATAL EXCEPTION|ANR in $PKG" "$OUT/logcat-release.txt"; then echo "FAIL release build crashed" | tee -a "$OUT/report.txt"; exit 1; fi
 echo "PASS release build (from AAB) installs, launches and stays up (pid $PID)" | tee -a "$OUT/report.txt"
