@@ -154,6 +154,7 @@
     }
     function frame(now) {
       var still = reduced || window.JadeLite;
+      if (!skyCan) { if (still && drawn && moonState === $('game').hidden) return; build(); }
       if (still && drawn && moonState === $('game').hidden) return;
     moonState = $('game').hidden;
       // behind a game board, 25 frames a second is plenty
@@ -178,8 +179,16 @@
       g.drawImage(layers[1].c, -40 - tilt.x * layers[1].depth, -tilt.y * 8, W + 80, H);
       g.drawImage(layers[2].c, -40 - tilt.x * layers[2].depth, -tilt.y * 10, W + 80, H);
       drawLanterns(now, true, still ? 0 : dt);
+      if (still && $('game').hidden === false) release();
     }
-    window.addEventListener('resize', resize);
+    // Battery saver keeps only the painted screen: the cached layers are dropped once the still frame
+    // without the moon (game screen) has been drawn, and rebuilt on demand when the moon must come back.
+    function release() {
+      [skyCan, moonCan && moonCan.c].concat(layers.map(function (l) { return l.c; })).forEach(function (k) { if (k) { k.width = 0; k.height = 0; } });
+      skyCan = null; layers = []; moonCan = null;
+    }
+    var resizeTimer = 0;
+    window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(resize, 150); });
     window.addEventListener('pointermove', function (e) { if (e.pointerType === 'mouse') { tilt.tx = (e.clientX / W - 0.5) * 2; tilt.ty = (e.clientY / H - 0.5) * 2; } });
     window.addEventListener('deviceorientation', function (e) {
       if (e.gamma == null) return;
@@ -191,6 +200,7 @@
       setTheme: function (t) { theme = t; build(); },
       resize: resize,
       release: function (x, y) {
+        if (reduced || window.JadeLite) return false;   // a still sky cannot carry a lantern away
         if (lanterns.filter(function (l) { return l.spawned; }).length > 12) return;
         var l = newLantern(y + 20, x, 0.95); l.spawned = true; l.v = 0.05; lanterns.push(l);
         drawn = false;
@@ -1138,7 +1148,7 @@
   $('btn-themes').addEventListener('click', openThemes);
   document.addEventListener('pointerdown', function (e) {
     // A tap on the open sky behind the home screen lets a lantern go.
-    if (e.target === $('bg') && !$('home').hidden) { A.unlock(); sky.release(e.clientX, e.clientY); A.chime(); buzz(8); return; }
+    if (e.target === $('bg') && !$('home').hidden) { A.unlock(); if (sky.release(e.clientX, e.clientY) !== false) { A.chime(); buzz(8); } return; }
     var q = e.target.closest && e.target.closest('.qtile');
     if (q && !reduced) { q.classList.remove('hop'); void q.offsetWidth; q.classList.add('hop'); A.select(); buzz(6); }
     var b = e.target.closest && e.target.closest('.cta, .duel-opt, .primary, .ghost, .chip, .theme-card');
