@@ -40,21 +40,19 @@ GitHub repository → **Settings → Secrets and variables → Actions**.
 | Name | Value |
 | --- | --- |
 | `APPLE_TEAM_ID` | your Team ID |
-| `ADMOB_IOS_APP_ID` | the iOS app ID from AdMob, `ca-app-pub-4940350948200557~…` |
-| `ADMOB_IOS_INTERSTITIAL_ID` | the iOS interstitial unit, `ca-app-pub-4940350948200557/…` |
+| `ADMOB_IOS_APP_ID` | optional override; built in: `ca-app-pub-4940350948200557~7108831181` |
+| `ADMOB_IOS_INTERSTITIAL_ID` | optional override; built in: `ca-app-pub-4940350948200557/3701078370` |
 
 Then push any change (or Actions → App builds → Run workflow). The **iOS build and simulator test** job archives a Release build, signs it, uploads it to App Store Connect, and puts the `.ipa` on the `ci-builds` branch. Processing in App Store Connect takes 10–30 minutes, after which the build appears under **TestFlight**.
 
-Without the AdMob variables the iOS release build simply shows no ads (debug builds always use Google's test ads).
+The iOS AdMob app ID and interstitial unit are already built into the project, so the variables are only needed to change them. Debug builds always use Google's test ads.
 
 ## 4. AdMob for iOS
 
-1. AdMob → **Apps → Add app → iOS** → "Is the app listed on a supported app store?" **No** (for now) → name **Jade Rush**.
-2. In that app: **Ad units → Add ad unit → Interstitial** → name `Between boards`.
-3. Put the app ID and unit ID in the GitHub variables above.
-4. After the app is live, link it to the App Store listing in AdMob (App settings → Add store info).
-5. **Privacy & messaging**: publish the **GDPR** message (also covers Android) and create an **IDFA explainer** message for iOS. The app shows Google's consent form first, then Apple's tracking permission prompt.
-6. `app-ads.txt` on your developer website (same line as Android): `google.com, pub-4940350948200557, DIRECT, f08c47fec0942fa0`
+1. Done: iOS app `ca-app-pub-4940350948200557~7108831181` with interstitial unit `ca-app-pub-4940350948200557/3701078370` (in `Info.plist` via build settings and in `js/ads.js`).
+2. After the app is live, link it to the App Store listing in AdMob (App settings → Add store info).
+3. **Privacy & messaging**: publish the **GDPR** message (also covers Android) and create an **IDFA explainer** message for iOS. The app shows Google's consent form first, then Apple's tracking permission prompt.
+4. `app-ads.txt` on your developer website (same line as Android): `google.com, pub-4940350948200557, DIRECT, f08c47fec0942fa0`
 
 The app already includes Google's `GADApplicationIdentifier`, the SKAdNetwork list and the tracking permission text ("Allowing tracking lets us show ads that are more relevant to you. Jade Rush stays free either way.").
 

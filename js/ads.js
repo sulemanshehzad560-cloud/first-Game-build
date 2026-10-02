@@ -9,7 +9,7 @@
   var CONFIG = {
     // Android: app ID lives in AndroidManifest.xml. iOS: app ID and unit come from Info.plist build settings.
     android: { interstitialId: 'ca-app-pub-4940350948200557/7070755437', testInterstitialId: 'ca-app-pub-3940256099942544/1033173712' },
-    ios: { interstitialId: '', testInterstitialId: 'ca-app-pub-3940256099942544/4411468910' },
+    ios: { interstitialId: 'ca-app-pub-4940350948200557/3701078370', testInterstitialId: 'ca-app-pub-3940256099942544/4411468910' },
     boardsBetweenAds: 2,
     minGapMs: 120000,
     firstLevelWithAds: 3

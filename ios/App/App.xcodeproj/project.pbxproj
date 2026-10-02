@@ -307,8 +307,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				ADMOB_IOS_APP_ID = "ca-app-pub-3940256099942544~1458002511";
-				ADMOB_IOS_INTERSTITIAL_ID = "";
+				ADMOB_IOS_APP_ID = "ca-app-pub-4940350948200557~7108831181";
+				ADMOB_IOS_INTERSTITIAL_ID = "ca-app-pub-4940350948200557/3701078370";
 				MARKETING_VERSION = 1.0.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.sulemanshehzad.jaderush;
@@ -331,8 +331,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				ADMOB_IOS_APP_ID = "ca-app-pub-3940256099942544~1458002511";
-				ADMOB_IOS_INTERSTITIAL_ID = "";
+				ADMOB_IOS_APP_ID = "ca-app-pub-4940350948200557~7108831181";
+				ADMOB_IOS_INTERSTITIAL_ID = "ca-app-pub-4940350948200557/3701078370";
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.sulemanshehzad.jaderush;
 				PRODUCT_NAME = "$(TARGET_NAME)";
