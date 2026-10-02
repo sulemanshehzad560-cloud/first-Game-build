@@ -177,7 +177,7 @@ jobs:
           set -o pipefail
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -40
+            -derivedDataPath build/ios CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= build 2>&1 | tail -40
 
       - name: Simulator self-test
         run: bash ci/ios-smoke.sh

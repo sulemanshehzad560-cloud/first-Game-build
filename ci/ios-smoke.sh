@@ -20,8 +20,20 @@ UDID=${DEVICE%% *}
 echo "Simulator: $DEVICE" | tee -a "$OUT/report.txt"
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b > /dev/null
+# The simulator only launches signed apps; make sure every bundle carries an ad-hoc signature.
+codesign --verify "$APP" 2>/dev/null || {
+  find "$APP/Frameworks" -maxdepth 1 \( -name "*.framework" -o -name "*.dylib" \) -exec codesign --force --sign - {} \; 2>/dev/null
+  codesign --force --sign - "$APP"
+}
+codesign -dv "$APP" 2>&1 | grep -E "Signature|Identifier" | head -2
 xcrun simctl install "$UDID" "$APP"
-xcrun simctl launch --terminate-running-process --stdout="$OUT/stdout.txt" --stderr="$OUT/stderr.txt" "$UDID" "$BUNDLE" -JadeSelfTest
+sleep 10   # let SpringBoard finish starting after boot
+launched=0
+for attempt in 1 2 3; do
+  if xcrun simctl launch --terminate-running-process --stdout="$OUT/stdout.txt" --stderr="$OUT/stderr.txt" "$UDID" "$BUNDLE" -JadeSelfTest; then launched=1; break; fi
+  echo "launch attempt $attempt failed, retrying"; sleep 10
+done
+[ "$launched" = 1 ] || { echo "FAIL the simulator refused to launch the app" | tee -a "$OUT/report.txt"; xcrun simctl io "$UDID" screenshot "$OUT/ios-launch-failed.png" >/dev/null 2>&1; exit 1; }
 
 shots=0
 for i in $(seq 1 120); do
