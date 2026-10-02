@@ -20,6 +20,8 @@ UDID=${DEVICE%% *}
 echo "Simulator: $DEVICE" | tee -a "$OUT/report.txt"
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b > /dev/null
+# Give the device a real UI session; headless SpringBoard can refuse app launches.
+open -a Simulator --args -CurrentDeviceUDID "$UDID" 2>/dev/null || true
 # The simulator only launches signed apps; make sure every bundle carries an ad-hoc signature.
 codesign --verify "$APP" 2>/dev/null || {
   find "$APP/Frameworks" -maxdepth 1 \( -name "*.framework" -o -name "*.dylib" \) -exec codesign --force --sign - {} \; 2>/dev/null
@@ -33,7 +35,17 @@ for attempt in 1 2 3; do
   if xcrun simctl launch --terminate-running-process --stdout="$OUT/stdout.txt" --stderr="$OUT/stderr.txt" "$UDID" "$BUNDLE" -JadeSelfTest; then launched=1; break; fi
   echo "launch attempt $attempt failed, retrying"; sleep 10
 done
-[ "$launched" = 1 ] || { echo "FAIL the simulator refused to launch the app" | tee -a "$OUT/report.txt"; xcrun simctl io "$UDID" screenshot "$OUT/ios-launch-failed.png" >/dev/null 2>&1; exit 1; }
+if [ "$launched" != 1 ]; then
+  echo "FAIL the simulator refused to launch the app" | tee -a "$OUT/report.txt"
+  xcrun simctl io "$UDID" screenshot "$OUT/ios-launch-failed.png" >/dev/null 2>&1
+  # Collect the reason SpringBoard gave and any crash reports for the next diagnosis.
+  xcrun simctl spawn "$UDID" log show --last 6m --style compact \
+    --predicate 'process == "SpringBoard" OR process == "runningboardd" OR process == "App" OR eventMessage CONTAINS[c] "jaderush"' \
+    > "$OUT/launch-log.txt" 2>&1 || true
+  grep -iE "jaderush|denied|termin|crash|launch|sign|exit" "$OUT/launch-log.txt" | tail -60
+  find ~/Library/Logs/DiagnosticReports -newer "$APP" -type f 2>/dev/null | while read -r f; do cp "$f" "$OUT/"; echo "crash report: $f"; head -60 "$f"; done
+  exit 1
+fi
 
 shots=0
 for i in $(seq 1 120); do
