@@ -44,7 +44,7 @@ jobs:
 
       - name: Version code
         id: meta
-        run: echo "code=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_OUTPUT"
+        run: echo "code=$((200 + GITHUB_RUN_NUMBER))" >> "$GITHUB_OUTPUT"
 
       - name: Install
         run: npm ci
@@ -193,7 +193,7 @@ jobs:
           ADMOB_IOS_INTERSTITIAL_ID: ${{ vars.ADMOB_IOS_INTERSTITIAL_ID }}
         run: |
           set -eo pipefail
-          CODE=$((100 + GITHUB_RUN_NUMBER))
+          CODE=$((200 + GITHUB_RUN_NUMBER))
           KEY_DIR="$HOME/.appstoreconnect/private_keys"; mkdir -p "$KEY_DIR"
           printf '%s' "$ASC_KEY_P8" > "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
