@@ -27,12 +27,28 @@ console.log('… launched');
 
 let page;
 const errors = [];
+// Attach to the live page. If Android relaunches the activity early (the emulator does while it finishes
+// booting), the old activity's WebView can linger with a dead native bridge; drive that one and every
+// click lands on a page nobody sees. A page is live when it is visible and a native call answers.
+const isLive = p => p.evaluate(() => document.visibilityState === 'visible' && window.Capacitor &&
+  Promise.race([(window.Capacitor.Plugins.App || window.Capacitor.registerPlugin('App')).getInfo().then(() => true, () => false), new Promise(r => setTimeout(() => r(false), 4000))])).catch(() => false);
 async function connect() {
-  const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
-  page = await webview.page();
-  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
+  await device.webView({ pkg: PKG }, { timeout: 60000 });
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const views = device.webViews().filter(v => v.pkg() === PKG).reverse();
+    for (const v of views) {
+      const p = await v.page().catch(() => null);
+      if (!p || !(await isLive(p))) continue;
+      page = p;
+      page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+      page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+      await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
+      if (attempt || views.length > 1) console.log(`   attached to the live page (${views.length} WebView(s), attempt ${attempt + 1})`);
+      return;
+    }
+    await sleep(2000);
+  }
+  throw new Error('no live WebView page for ' + PKG);
 }
 // Each step gets two minutes; a stalled WebView or emulator fails the step instead of hanging the job.
 async function step(name, fn) {
@@ -62,6 +78,7 @@ await step('launch', async () => {
   await page.evaluate(() => { localStorage.setItem('jaderush.v1', JSON.stringify({ seenHowto: true, level: 1 })); setTimeout(() => location.reload(), 100); });
   await sleep(1500);
   await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
+  if (!(await isLive(page))) await connect();
   await sleep(2500); await shot('01-home');
 });
 
