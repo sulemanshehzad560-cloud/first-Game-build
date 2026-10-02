@@ -16,7 +16,7 @@ Most kinds have four copies, so taking the wrong pair can bury the tile you need
 | **Online: Take turns** | One shared board. Each turn you make one match, with 15 seconds per turn. Winds and dragons are worth 2 points. Highest score wins. |
 | **Pass & play / Vs computer** | Take-turns duel on one device, or against an AI (Easy, Normal, Hard). Hard also avoids leaving you high-value pairs. |
 
-Look and feel: a top-down view of realistic wooden tiles (varnished grain with knots, unique per tile, carved and painted symbols, a dyed base strip, and shadows cast onto lower layers), six unlockable woods (Maple, Cherry, Birch, Teak, Rosewood, Ebony) that change the tiles and the animated table, chapters of 10 levels, tiles that lift on hover and selection, matched pairs that slam together with a hit-stop, screen shake, sparks, flying chips and a heavy clack, flip animations on shuffle, combo banners, confetti, and haptics on phones.
+Look and feel: a top-down view of realistic wooden tiles (varnished grain with knots, unique per tile, carved and painted symbols, a dyed base strip, and shadows cast onto lower layers), six unlockable woods (Maple, Cherry, Birch, Teak, Rosewood, Ebony) that change the tiles and retint the whole scene, a "lantern night" backdrop (moon, stars, misty mountain ridges and paper sky lanterns that lean with the phone; tap the sky to release one), a red-lacquer Play plaque, real standing tiles as menu buttons, a felt table with gold inlay under the board, a burning-fuse timer, a winding trail of medallions for the 5,000-level map, tiles that lift on hover and selection, matched pairs that slam together with a hit-stop, screen shake, sparks, flying chips and a heavy clack, flip animations on shuffle, combo banners, confetti, and haptics on phones.
 
 What keeps it challenging: combo multipliers for matching within 5 seconds, hints that cost 10 seconds, limited shuffles, a time bonus, and per-level best scores.
 
@@ -42,7 +42,7 @@ The game ships as an Android app built with [Capacitor](https://capacitorjs.com/
 * **Device reach:** Android 7.0+ (about 99% of active devices), phones, tablets and Chromebooks, a battery saver mode for low-end phones, and an update prompt for outdated WebViews.
 * **Signing:** the release bundle is signed with an upload key that is never committed. Add it as repository secrets to sign in CI (see `docs/PLAY_STORE_GUIDE.md`).
 * **Local build:** `npm ci && npm run android:sync`, then open `android/` in Android Studio or run `./gradlew bundleRelease`.
-* **Store assets:** `store/` (icon, feature graphic, phone screenshots), regenerated with `npm run assets`.
+* **Store assets:** `store/` (icon, feature graphic, phone screenshots), regenerated with `npm run assets` (icon and graphics) and `node tools/store-shots.mjs` (screenshots).
 * **Publishing:** the full Play Console checklist is in [`docs/PLAY_STORE_GUIDE.md`](docs/PLAY_STORE_GUIDE.md).
 
 ## Code map

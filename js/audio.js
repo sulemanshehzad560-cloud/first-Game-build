@@ -69,6 +69,7 @@
     tick: function () { tone(1200, 0.05, 'square', 0.04); },
     win: function () { [0, 2, 4, 5, 7, 9].forEach(function (s, k) { tone(note(s), 0.45, 'sine', 0.22, k * 0.08); }); },
     lose: function () { [5, 3, 1, 0].forEach(function (s, k) { tone(note(s) / 2, 0.4, 'triangle', 0.18, k * 0.13); }); },
-    pop: function () { tone(880, 0.06, 'sine', 0.12); }
+    pop: function () { tone(880, 0.06, 'sine', 0.12); },
+    chime: function () { var s = [0, 2, 4, 7, 9][Math.floor(Math.random() * 5)]; tone(note(s) * 2, 0.9, 'sine', 0.09); tone(note(s) * 4, 0.5, 'sine', 0.035, 0.03); }
   };
 })(this);

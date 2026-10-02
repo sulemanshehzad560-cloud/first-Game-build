@@ -81,6 +81,7 @@
       this.fw = 2 * u; this.fh = 2 * this.uy;
       var bw = spanX * u, bh = spanY * this.uy + (layers + 1) * this.dz;
       this.ox = (rect.width - bw) / 2; this.oy = (rect.height - bh) / 2;
+      if (this.onLayout) this.onLayout({ x: this.ox, y: this.oy, w: bw, h: bh });
     }
     this.sprites.clear();
     this.dirty = true;

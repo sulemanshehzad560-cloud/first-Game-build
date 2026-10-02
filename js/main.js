@@ -35,6 +35,7 @@
     var t = currentTheme(), st = document.documentElement.style;
     st.setProperty('--bg0', t.bg[0]); st.setProperty('--bg1', t.bg[1]);
     st.setProperty('--glowA', t.bg[2]); st.setProperty('--glowB', t.bg[3]); st.setProperty('--accent', t.accent);
+    st.setProperty('--accent-soft', hexA(t.accent, 0.28)); st.setProperty('--accent-glow', hexA(t.accent, 0.55));
     var meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t.bg[0];
     board.setTheme(t); demo.setTheme(t); sky.setTheme(t);
   }
@@ -48,40 +49,150 @@
   function hexA(h, a) { var v = parseInt(h.slice(1), 16); return 'rgba(' + (v >> 16 & 255) + ',' + (v >> 8 & 255) + ',' + (v & 255) + ',' + a + ')'; }
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Animated table: slow colored light blobs and drifting sparkles in the active set's colors.
+  // The scene behind every screen: night sky, moon, stars, three mountain ridges with mist, and paper sky
+  // lanterns drifting up, all tinted by the active tile set. It leans with the phone (or the pointer) and a
+  // tap on the open sky releases a new lantern. Static layers are cached; battery saver draws one still frame.
   var sky = (function () {
-    var c = $('bg'), g = c.getContext('2d'), W = 0, H = 0, theme = THEMES[0], sparks = [], drawn = false;
-    var blobs = [[0.15, 0.12, 0.7, 2, 0.00011], [0.9, 0.35, 0.55, 3, 0.00008], [0.3, 0.9, 0.65, 3, 0.00013], [0.8, 0.95, 0.5, 2, 0.0001]];
-    function resize() {
-      var dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = innerWidth; H = innerHeight; c.width = W * dpr; c.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      sparks = [];
-      for (var k = 0; k < Math.round(W * H / 14000); k++) sparks.push({ x: Math.random() * W, y: Math.random() * H, r: 0.6 + Math.random() * 1.8, s: 0.004 + Math.random() * 0.012, p: Math.random() * 6.28 });
+    var c = $('bg'), g = c.getContext('2d'), W = 0, H = 0, dpr = 1, theme = THEMES[0], drawn = false;
+    var layers = [], skyCan = null, moonCan = null, moonA = 1, lantern = null, lanterns = [], stars = [], lastDraw = 0;
+    var tilt = { x: 0, y: 0, tx: 0, ty: 0 }, moonState = null;
+    function mix(a, b, t) {
+      var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+      var r = (x >> 16 & 255) * (1 - t) + (y >> 16 & 255) * t, gg = (x >> 8 & 255) * (1 - t) + (y >> 8 & 255) * t, bl = (x & 255) * (1 - t) + (y & 255) * t;
+      return 'rgb(' + Math.round(r) + ',' + Math.round(gg) + ',' + Math.round(bl) + ')';
+    }
+    function canvas(w, h) { var k = document.createElement('canvas'); k.width = Math.max(1, Math.round(w * dpr)); k.height = Math.max(1, Math.round(h * dpr)); var x = k.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); return [k, x]; }
+    function rnd(seed) { return function () { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
+    function build() {
+      var r = rnd(7), M = 40;
+      // sky, moon and the fixed stars
+      var s = canvas(W + M, H + M), k = s[1], top = mix(theme.bg[0], '#000000', 0.62);
+      var gr = k.createLinearGradient(0, 0, 0, H + M);
+      gr.addColorStop(0, top); gr.addColorStop(0.45, mix(theme.bg[0], '#000000', 0.25)); gr.addColorStop(0.78, theme.bg[1]); gr.addColorStop(1, mix(theme.bg[1], theme.bg[3], 0.35));
+      k.fillStyle = gr; k.fillRect(0, 0, W + M, H + M);
+      // the moon is its own sprite so it can set behind the game screen's panels
+      var mr = Math.min(W, H) * 0.06, mm = canvas(mr * 14, mr * 14), mk = mm[1], mc = mr * 7;
+      var halo = mk.createRadialGradient(mc, mc, mr * 0.5, mc, mc, mr * 7);
+      halo.addColorStop(0, hexA(theme.bg[3], 0.3)); halo.addColorStop(1, hexA(theme.bg[3], 0));
+      mk.fillStyle = halo; mk.fillRect(0, 0, mr * 14, mr * 14);
+      var moon = mk.createRadialGradient(mc - mr * 0.3, mc - mr * 0.3, mr * 0.1, mc, mc, mr);
+      moon.addColorStop(0, '#fffaf0'); moon.addColorStop(1, mix('#fff1d0', theme.bg[3], 0.35));
+      mk.fillStyle = moon; mk.beginPath(); mk.arc(mc, mc, mr, 0, 6.283); mk.fill();
+      mk.fillStyle = 'rgba(160,140,110,.18)';
+      [[-0.3, -0.2, 0.22], [0.25, 0.15, 0.16], [-0.05, 0.4, 0.12]].forEach(function (cr) { mk.beginPath(); mk.arc(mc + cr[0] * mr, mc + cr[1] * mr, cr[2] * mr, 0, 6.283); mk.fill(); });
+      moonCan = { c: mm[0], s: mr * 14, x: W * 0.13, y: H * 0.16 };
+      stars = [];
+      for (var n = 0; n < Math.round(W * H / 5000); n++) {
+        var st = { x: r() * (W + M), y: Math.pow(r(), 1.6) * H * 0.6, r: 0.4 + r() * 1.3, p: r() * 6.28, tw: r() < 0.3 };
+        if (!st.tw) { k.fillStyle = 'rgba(255,248,230,' + (0.25 + r() * 0.5) + ')'; k.beginPath(); k.arc(st.x, st.y, st.r, 0, 6.283); k.fill(); }
+        else stars.push(st);
+      }
+      skyCan = s[0];
+      // three ridges, far to near, each with a band of mist above it
+      layers = [];
+      [[0.62, 0.16, 0.28, 18], [0.72, 0.13, 0.55, 30], [0.84, 0.1, 0.82, 46]].forEach(function (L, idx) {
+        var lw = W + M * 2, lc = canvas(lw, H), x = lc[1], base = H * L[0], amp = H * L[1];
+        var ph = [r() * 6, r() * 6, r() * 6], col = mix(theme.bg[0], '#000000', L[2]);
+        var mist = x.createLinearGradient(0, base - amp * 1.4, 0, base + amp * 0.2);
+        mist.addColorStop(0, hexA(theme.bg[2], 0)); mist.addColorStop(0.7, hexA(theme.bg[2], 0.07 + idx * 0.02)); mist.addColorStop(1, hexA(theme.bg[2], 0));
+        x.fillStyle = mist; x.fillRect(0, base - amp * 1.4, lw, amp * 1.8);
+        x.beginPath(); x.moveTo(0, H);
+        for (var px = 0; px <= lw; px += 6) {
+          var t = px / lw * 6.283;
+          var y = base - amp * (0.55 * Math.sin(t * 1.3 + ph[0]) + 0.3 * Math.sin(t * 3.1 + ph[1]) + 0.15 * Math.abs(Math.sin(t * 7.7 + ph[2])));
+          x.lineTo(px, y);
+        }
+        x.lineTo(lw, H); x.closePath();
+        var fill = x.createLinearGradient(0, base - amp, 0, H);
+        fill.addColorStop(0, col); fill.addColorStop(1, mix(theme.bg[0], '#000000', Math.min(0.95, L[2] + 0.2)));
+        x.fillStyle = fill; x.fill();
+        // rim light from the moon on the ridge line
+        x.strokeStyle = hexA(theme.bg[3], 0.08 + idx * 0.03); x.lineWidth = 1.2; x.stroke();
+        layers.push({ c: lc[0], depth: L[3] });
+      });
+      // one lantern sprite, scaled for every lantern
+      var ls = canvas(64, 96), lx = ls[1];
+      var glow = lx.createRadialGradient(32, 50, 2, 32, 50, 32);
+      glow.addColorStop(0, hexA(theme.bg[3], 0.55)); glow.addColorStop(1, hexA(theme.bg[3], 0));
+      lx.fillStyle = glow; lx.fillRect(0, 0, 64, 96);
+      var body = lx.createLinearGradient(20, 0, 44, 0);
+      body.addColorStop(0, '#d9452b'); body.addColorStop(0.5, '#ffcf6e'); body.addColorStop(1, '#d9452b');
+      lx.fillStyle = body; lx.beginPath(); lx.ellipse(32, 50, 12, 16, 0, 0, 6.283); lx.fill();
+      lx.fillStyle = 'rgba(255,250,220,.75)'; lx.beginPath(); lx.ellipse(32, 52, 4, 7, 0, 0, 6.283); lx.fill();
+      lx.fillStyle = '#4a1a10'; lx.fillRect(26, 33, 12, 3); lx.fillRect(27, 64, 10, 3);
+      lantern = ls[0];
       drawn = false;
     }
-    function frame(now) {
-      if ((reduced || window.JadeLite) && drawn) return;
-      drawn = true;
-      var base = g.createLinearGradient(0, 0, 0, H);
-      base.addColorStop(0, theme.bg[1]); base.addColorStop(1, theme.bg[0]);
-      g.fillStyle = base; g.fillRect(0, 0, W, H);
-      var m = Math.max(W, H);
-      blobs.forEach(function (b, k) {
-        var x = (b[0] + Math.sin(now * b[4] + k) * 0.08) * W, y = (b[1] + Math.cos(now * b[4] * 1.3 + k) * 0.06) * H;
-        var gr = g.createRadialGradient(x, y, 0, x, y, b[2] * m);
-        gr.addColorStop(0, hexA(theme.bg[b[3]], 0.32)); gr.addColorStop(1, hexA(theme.bg[b[3]], 0));
-        g.fillStyle = gr; g.fillRect(0, 0, W, H);
-      });
-      for (var k = 0; k < sparks.length; k++) {
-        var sp = sparks[k], yy = (sp.y - now * sp.s) % H;
-        if (yy < 0) yy += H;
-        g.fillStyle = hexA(k % 3 ? '#ffffff' : theme.accent, 0.25 + 0.35 * Math.sin(sp.p + now / 700));
-        g.beginPath(); g.arc(sp.x + Math.sin(now / 2000 + sp.p) * 8, yy, sp.r, 0, 6.283); g.fill();
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, window.JadeLite ? 1 : 1.5);
+      W = innerWidth; H = innerHeight;
+      c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      build();
+      var want = window.JadeLite ? 5 : 14;
+      while (lanterns.length < want) lanterns.push(newLantern(Math.random() * H * 1.2));
+      lanterns.length = want;
+    }
+    function newLantern(y, x, z) {
+      z = z || 0.25 + Math.random() * 0.75;
+      return { x: x == null ? Math.random() * W : x, y: y == null ? H + 40 : y, z: z, p: Math.random() * 6.28, v: 0.006 + z * 0.014, born: performance.now() };
+    }
+    function drawLanterns(now, near, dt) {
+      for (var k = 0; k < lanterns.length; k++) {
+        var l = lanterns[k];
+        if ((l.z >= 0.6) !== near) continue;
+        l.y -= l.v * dt;
+        if (l.y < -60) { if (l.spawned) { lanterns.splice(k, 1); k--; continue; } var nl = newLantern(); l.x = nl.x; l.y = nl.y; l.z = nl.z; l.v = nl.v; }
+        var s = 0.35 + l.z * 0.7, sway = Math.sin(now / 1400 + l.p) * 10 * l.z;
+        var px = l.x + sway + tilt.x * 26 * l.z, py = l.y + tilt.y * 14 * l.z;
+        g.globalAlpha = Math.min(1, 0.45 + l.z * 0.6) * (0.85 + 0.15 * Math.sin(now / 180 + l.p * 3));
+        g.drawImage(lantern, px - 32 * s, py - 48 * s, 64 * s, 96 * s);
       }
+      g.globalAlpha = 1;
+    }
+    function frame(now) {
+      var still = reduced || window.JadeLite;
+      if (still && drawn && moonState === $('game').hidden) return;
+    moonState = $('game').hidden;
+      // behind a game board, 25 frames a second is plenty
+      if (!still && !$('game').hidden && now - lastDraw < 40) return;
+      var dt = lastDraw ? Math.min(100, now - lastDraw) : 16; lastDraw = now; drawn = true;
+      tilt.x += (tilt.tx - tilt.x) * 0.06; tilt.y += (tilt.ty - tilt.y) * 0.06;
+      g.drawImage(skyCan, -20 - tilt.x * 6, -20 - tilt.y * 4, W + 40, H + 40);
+      // the moon hangs low over the ridges on the menus and sets while a board is up
+      moonA += (($('game').hidden ? 1 : 0) - moonA) * (still ? 1 : 0.05);
+      if (moonA > 0.01) {
+        g.globalAlpha = moonA;
+        g.drawImage(moonCan.c, moonCan.x - moonCan.s / 2 - tilt.x * 10, moonCan.y - moonCan.s / 2 + (1 - moonA) * 60 - tilt.y * 6, moonCan.s, moonCan.s);
+        g.globalAlpha = 1;
+      }
+      for (var k = 0; k < stars.length; k++) {
+        var st = stars[k];
+        g.fillStyle = 'rgba(255,248,230,' + (0.35 + 0.45 * Math.sin(now / 600 + st.p)) + ')';
+        g.beginPath(); g.arc(st.x - 20 - tilt.x * 6, st.y - 20 - tilt.y * 4, st.r, 0, 6.283); g.fill();
+      }
+      g.drawImage(layers[0].c, -40 - tilt.x * layers[0].depth, -tilt.y * 6, W + 80, H);
+      drawLanterns(now, false, still ? 0 : dt);
+      g.drawImage(layers[1].c, -40 - tilt.x * layers[1].depth, -tilt.y * 8, W + 80, H);
+      g.drawImage(layers[2].c, -40 - tilt.x * layers[2].depth, -tilt.y * 10, W + 80, H);
+      drawLanterns(now, true, still ? 0 : dt);
     }
     window.addEventListener('resize', resize);
+    window.addEventListener('pointermove', function (e) { if (e.pointerType === 'mouse') { tilt.tx = (e.clientX / W - 0.5) * 2; tilt.ty = (e.clientY / H - 0.5) * 2; } });
+    window.addEventListener('deviceorientation', function (e) {
+      if (e.gamma == null) return;
+      tilt.tx = Math.max(-1, Math.min(1, e.gamma / 25)); tilt.ty = Math.max(-1, Math.min(1, (e.beta - 45) / 30));
+    });
     resize();
-    return { frame: frame, setTheme: function (t) { theme = t; drawn = false; } };
+    return {
+      frame: frame,
+      setTheme: function (t) { theme = t; build(); },
+      resize: resize,
+      release: function (x, y) {
+        if (lanterns.filter(function (l) { return l.spawned; }).length > 12) return;
+        var l = newLantern(y + 20, x, 0.95); l.spawned = true; l.v = 0.05; lanterns.push(l);
+        drawn = false;
+      }
+    };
   })();
 
   // Confetti for wins.
@@ -220,29 +331,45 @@
     var unlocked = THEMES.filter(function (t) { return totalStars() >= t.stars; }).length;
     $('themes-meta').textContent = unlocked + ' of ' + THEMES.length + ' unlocked';
     $('continue-meta').textContent = fmt(cleared) + ' cleared · ' + fmt(totalStars()) + ' ★ collected';
-    $('levels-meta').textContent = fmt(cleared) + ' of ' + fmt(MAX) + ' cleared';
+    $('levels-meta').textContent = fmt(cleared) + ' / ' + fmt(MAX);
+    $('home-stars').textContent = '★ ' + fmt(totalStars());
+    $('journey-fill').style.width = (cleared / MAX * 100).toFixed(2) + '%';
     $('daily-meta').textContent = d ? 'Done today · ' + '★★★'.slice(0, d)
       : store.streak.n > 1 && store.streak.last === dayKey(-1) ? store.streak.n + '-day streak' : 'New every day';
     $('ai-meta').textContent = store.wins.ai ? store.wins.ai + ' wins' : '3 levels';
   }
-  // One continuous map, built in blocks of 100 so the browser skips laying out the ones off screen.
+  // One continuous trail of medallions winding down the screen. Built in blocks of 100 levels (each with its own
+  // SVG path) so the browser skips laying out the blocks that are off screen.
+  var ROW = 88;
+  function trailX(L) { return 50 + 30 * Math.sin((L - 1) * 0.62); }
   function renderLevelGrid() {
     var grid = $('level-grid'), html = '', last = Math.min(MAX, Math.ceil((store.level + 20) / 100) * 100);
-    for (var L = 1; L <= last; L++) {
-      if ((L - 1) % 100 === 0) html += (L > 1 ? '</div>' : '') + '<div class="level-grid">';
-      var s = store.stars[L] || 0, locked = L > store.level;
-      html += '<button class="lvl' + (L === store.level && !store.done ? ' current' : '') + '" data-level="' + L + '"' + (locked ? ' disabled' : '') + '>' + L +
-        '<small>' + (locked ? '' : '★★★'.slice(0, s) || '·') + '</small></button>';
+    for (var b = 1; b <= last; b += 100) {
+      var end = Math.min(last, b + 99), rows = '', all = '', done = '', reach = store.done ? end : Math.min(end, store.level);
+      for (var L = b; L <= end; L++) {
+        var x = trailX(L), y = (L - b) * ROW + 44, s = store.stars[L] || 0, locked = L > store.level;
+        rows += '<div class="lvl-row"><button class="lvl' + (L === store.level && !store.done ? ' current' : '') + '" style="--x:' + x.toFixed(1) + '%" data-level="' + L + '"' +
+          (locked ? ' disabled aria-label="Level ' + L + ', locked"' : '') + '>' + L + (locked ? '' : '<small>' + ('★★★'.slice(0, s) || '') + '</small>') + '</button></div>';
+        var seg = L === b ? 'M' + x.toFixed(1) + ' ' + y : ' C' + trailX(L - 1).toFixed(1) + ' ' + (y - ROW / 2) + ' ' + x.toFixed(1) + ' ' + (y - ROW / 2) + ' ' + x.toFixed(1) + ' ' + y;
+        all += seg; if (L <= reach) done += seg;
+      }
+      html += '<div class="level-grid"><svg viewBox="0 0 100 ' + (end - b + 1) * ROW + '" preserveAspectRatio="none" aria-hidden="true"><path class="trail" vector-effect="non-scaling-stroke" d="' + all + '"/>' +
+        (done ? '<path class="trail-done" vector-effect="non-scaling-stroke" d="' + done + '"/>' : '') + '</svg>' + rows + '</div>';
     }
-    html += '</div>';
     if (last < MAX) html += '<p class="level-more">' + fmt(MAX - last) + ' more levels ahead, up to Level ' + fmt(MAX) + '</p>';
     grid.innerHTML = html;
-    $('levels-stars').textContent = fmt(totalStars()) + ' ★';
+    $('levels-stars').textContent = '★ ' + fmt(totalStars());
     var cur = grid.querySelector('.current'); if (cur) cur.scrollIntoView({ block: 'center' });
   }
 
   // ------------------------------------------------------------- shared board state
   var board = new window.TileBoard($('board'));
+  // The felt table hugs the tiles: the canvas sits 18px inside the wrap, the table adds 16px around the board.
+  board.onLayout = function (b) {
+    var t = $('tray').style, pad = 16;
+    t.left = (18 + b.x - pad) + 'px'; t.top = (18 + b.y - pad) + 'px';
+    t.width = (b.w + pad * 2) + 'px'; t.height = (b.h + pad * 2) + 'px';
+  };
   var G = { mode: null };
   function isTurns() { return G.duel === 'turns'; }
   function midpoint(a, b) { var r1 = board.rect(a), r2 = board.rect(b); return [(r1.x + r2.x + r1.w) / 2, (r1.y + r2.y + r1.h) / 2]; }
@@ -891,7 +1018,7 @@
     box.appendChild(toggleRow('Sound effects', store.sound, function (v) { store.sound = v; A.setEnabled(v); save(); if (v) A.select(); }));
     box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }));
     box.appendChild(toggleRow('Battery saver (fewer effects)', window.JadeLite, function (v) {
-      store.lite = v; window.JadeLite = v; save(); board.resize(); demo.resize(); sky.setTheme(currentTheme());
+      store.lite = v; window.JadeLite = v; save(); board.resize(); demo.resize(); sky.resize();
     }));
     box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(); }));
     box.appendChild(linkRow('How to play', function () { closeModal(); howTo(after); }));
@@ -1007,7 +1134,11 @@
   $('board').addEventListener('pointerleave', function () { board.setHover(-1); });
   $('btn-themes').addEventListener('click', openThemes);
   document.addEventListener('pointerdown', function (e) {
-    var b = e.target.closest && e.target.closest('.cta, .tile, .primary, .ghost, .chip, .theme-card, .lvl');
+    // A tap on the open sky behind the home screen lets a lantern go.
+    if (e.target === $('bg') && !$('home').hidden) { A.unlock(); sky.release(e.clientX, e.clientY); A.chime(); buzz(8); return; }
+    var q = e.target.closest && e.target.closest('.qtile');
+    if (q && !reduced) { q.classList.remove('hop'); void q.offsetWidth; q.classList.add('hop'); A.select(); buzz(6); }
+    var b = e.target.closest && e.target.closest('.cta, .duel-opt, .primary, .ghost, .chip, .theme-card');
     if (!b || b.disabled || reduced) return;
     var r = b.getBoundingClientRect(), s = Math.max(r.width, r.height), sp = document.createElement('span');
     sp.className = 'ripple'; sp.style.width = sp.style.height = s + 'px';

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Jade Rush</title>
 <meta name="description" content="Jade Rush is a Mahjong tile-matching game with 5,000 levels, a clock to beat, and two-player online duels.">
-<meta name="theme-color" content="#0d2622">
+<meta name="theme-color" content="#06121a">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="css/style.css">
@@ -16,50 +16,60 @@
 <main id="app">
   <!-- HOME -->
   <section id="home" class="screen">
-    <header class="brand">
-      <canvas id="demo" aria-label="Tiles being matched on a small demo board"></canvas>
-      <h1 class="logo">Jade<span>Rush</span></h1>
-      <p class="tagline">Match free tiles. Beat the clock. Beat your friends.</p>
+    <header class="home-top">
+      <span class="star-pill" id="home-stars" aria-label="Stars collected">★ 0</span>
+      <div class="home-top-actions">
+        <button id="btn-howto" class="round-btn" aria-label="How to play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 9a3 3 0 1 1 4.3 2.7c-.9.4-1.5 1.2-1.5 2.2v.6M12 18h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+        <button id="btn-settings" class="round-btn" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+      </div>
     </header>
+
+    <div class="brand">
+      <div class="demo-tray"><canvas id="demo" aria-label="Tiles being matched on a small demo board"></canvas></div>
+      <h1 class="logo"><span class="logo-jade">Jade</span><span class="logo-rush">Rush</span><i class="seal" aria-hidden="true">中</i></h1>
+      <p class="tagline">Match the tiles · beat the clock</p>
+    </div>
 
     <nav class="menu">
       <button id="btn-continue" class="cta">
         <span class="cta-shine" aria-hidden="true"></span>
-        <span class="cta-eyebrow" id="continue-eyebrow">Journey · 5,000 levels</span>
-        <span class="cta-title" id="continue-label">Level 1</span>
-        <span class="cta-meta" id="continue-meta">0 cleared</span>
-        <span class="cta-play" aria-hidden="true">▶</span>
+        <span class="cta-text">
+          <span class="cta-eyebrow" id="continue-eyebrow">Journey · 5,000 levels</span>
+          <span class="cta-title" id="continue-label">Level 1</span>
+          <span class="cta-meta" id="continue-meta">0 cleared</span>
+        </span>
+        <span class="cta-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg></span>
+        <span class="cta-progress" aria-hidden="true"><i id="journey-fill"></i></span>
       </button>
-      <div class="trio">
-        <button id="btn-levels" class="tile t-teal">
-          <span class="mini" aria-hidden="true">一</span>
+
+      <div class="quick">
+        <button id="btn-levels" class="qtile">
+          <span class="qface" aria-hidden="true"><b>萬</b></span>
           <span class="tile-title">Level map</span>
           <span class="tile-meta" id="levels-meta">Replay for 3 ★</span>
         </button>
-        <button id="btn-daily" class="tile t-amber">
-          <span class="mini" aria-hidden="true">東</span>
+        <button id="btn-daily" class="qtile q-red">
+          <span class="qface" aria-hidden="true"><b>東</b></span>
           <span class="tile-title">Daily board</span>
           <span class="tile-meta" id="daily-meta">New every day</span>
         </button>
-        <button id="btn-themes" class="tile t-pink">
-          <span class="mini" aria-hidden="true">發</span>
+        <button id="btn-themes" class="qtile q-green">
+          <span class="qface" aria-hidden="true"><b>發</b></span>
           <span class="tile-title">Tile sets</span>
           <span class="tile-meta" id="themes-meta">1 of 6 unlocked</span>
         </button>
       </div>
 
-      <h2 class="section-label">Duel <span>2 players</span></h2>
-      <div class="trio">
-        <button id="btn-online" class="tile t-violet"><span class="mini" aria-hidden="true">中</span><span class="tile-title">Online</span><span class="tile-meta" id="online-meta">Race or take turns</span></button>
-        <button id="btn-local" class="tile t-coral"><span class="mini" aria-hidden="true">南</span><span class="tile-title">Pass &amp; play</span><span class="tile-meta">One device</span></button>
-        <button id="btn-ai" class="tile t-blue"><span class="mini" aria-hidden="true">北</span><span class="tile-title">Vs computer</span><span class="tile-meta" id="ai-meta">3 levels</span></button>
-      </div>
+      <section class="duel-card" aria-labelledby="duel-h">
+        <h2 class="duel-h" id="duel-h"><span>Duel</span><small>2 players</small></h2>
+        <div class="duel-row">
+          <button id="btn-online" class="duel-opt"><i aria-hidden="true">中</i><span class="tile-title">Online</span><span class="tile-meta" id="online-meta">Race or turns</span></button>
+          <button id="btn-local" class="duel-opt"><i aria-hidden="true">南</i><span class="tile-title">Pass &amp; play</span><span class="tile-meta">One device</span></button>
+          <button id="btn-ai" class="duel-opt"><i aria-hidden="true">北</i><span class="tile-title">Vs computer</span><span class="tile-meta" id="ai-meta">3 levels</span></button>
+        </div>
+      </section>
     </nav>
-
-    <footer class="home-foot">
-      <button id="btn-howto" class="link">How to play</button>
-      <button id="btn-settings" class="link">Settings</button>
-    </footer>
+    <p class="sky-hint" aria-hidden="true">Tap the sky to release a lantern</p>
   </section>
 
   <!-- LEVEL MAP -->
@@ -168,6 +178,7 @@
     </div>
 
     <div class="board-wrap" id="board-wrap">
+      <div class="tray" id="tray" aria-hidden="true"></div>
       <canvas id="board"></canvas>
       <div id="fx-layer" aria-live="polite"></div>
       <div id="banner" class="banner" hidden></div>
