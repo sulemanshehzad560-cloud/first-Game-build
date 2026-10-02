@@ -32,7 +32,7 @@ xcrun simctl install "$UDID" "$APP"
 sleep 10   # let SpringBoard finish starting after boot
 launched=0
 for attempt in 1 2 3; do
-  if xcrun simctl launch --terminate-running-process --stdout="$OUT/stdout.txt" --stderr="$OUT/stderr.txt" "$UDID" "$BUNDLE" -JadeSelfTest; then launched=1; break; fi
+  if SIMCTL_CHILD_NSUnbufferedIO=YES xcrun simctl launch --terminate-running-process --stdout="$OUT/stdout.txt" --stderr="$OUT/stderr.txt" "$UDID" "$BUNDLE" -JadeSelfTest; then launched=1; break; fi
   echo "launch attempt $attempt failed, retrying"; sleep 10
 done
 if [ "$launched" != 1 ]; then

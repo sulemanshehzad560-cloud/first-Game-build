@@ -27,6 +27,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 class MainViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(BuildInfoPlugin())
+        #if DEBUG
+        // The self-test is read from stdout redirected to a file, which is block-buffered by default.
+        if ProcessInfo.processInfo.arguments.contains("-JadeSelfTest") { setvbuf(stdout, nil, _IOLBF, 0) }
+        #endif
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
