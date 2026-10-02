@@ -23,7 +23,7 @@ Everything Play Console asks for, in the order it asks. Copy-paste the text bloc
 **Short description** (80 characters max):
 
 ```
-Match wooden Mahjong tiles against the clock. Endless levels, online duels.
+Match wooden Mahjong tiles against the clock. 5,000 levels, online duels.
 ```
 
 **Full description** (4000 characters max):
@@ -31,8 +31,8 @@ Match wooden Mahjong tiles against the clock. Endless levels, online duels.
 ```
 Jade Rush is Mahjong solitaire with a pulse. Match free tiles in pairs, chain combos before the clock runs out, and watch every pair slam together in a burst of wood chips and sparks.
 
-ENDLESS LEVELS
-Every level is generated for you and checked to be solvable, so the journey never ends. Boards grow taller, the clock gets tighter, and from level 13 the game stops highlighting free tiles. Pick the wrong copy of a tile and you can bury the one you need, so think ahead.
+5,000 LEVELS
+One long journey of 5,000 boards, every one checked to be solvable. Boards grow to the full 144 tiles, the clock keeps getting tighter, and from level 13 the game stops highlighting free tiles. Hints run out at level 2,500. Pick the wrong copy of a tile and you can bury the one you need, so think ahead.
 
 COMBOS AND STARS
 Match within five seconds of your last pair to build a combo, up to ×12. Clear fast without hints for three stars. Hints cost ten seconds and shuffles are limited.
@@ -51,7 +51,6 @@ One fresh board every day. Keep your streak alive.
 
 FEATURES
 • Traditional tiles: dots, bamboo, characters, winds and dragons
-• Chapters with their own colors, from Bamboo Grove to Cloud Palace
 • Pause any time; the clock stops
 • Sound effects and vibration you can switch off
 • Works offline (online duels need a connection)
@@ -123,7 +122,7 @@ Also add `public_profile` and `user_friends` to the listing's description of sig
 
 ```
 <en-US>
-First closed test of Jade Rush: endless Mahjong levels, combos, six wooden tile sets, a daily board and online duels. Please report anything that feels too hard, too easy or broken.
+First closed test of Jade Rush: 5,000 Mahjong levels, combos, six wooden tile sets, a daily board and online duels. Please report anything that feels too hard, too easy or broken.
 </en-US>
 ```
 

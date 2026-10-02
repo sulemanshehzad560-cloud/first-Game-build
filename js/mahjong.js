@@ -163,17 +163,22 @@
     return tiles.length >= 16 ? tiles : null;
   }
 
+  var MAX_LEVEL = 5000;
+
+  // Boards reach full size (144 tiles) by level 30. After that the long tail tightens slowly all the way
+  // to level 5000: the clock goes from 1.5 s to 1.15 s per tile, piles get taller, and hints run out.
   function levelSpec(L) {
+    var tail = L <= 42 ? 0 : Math.log(L / 42) / Math.log(MAX_LEVEL / 42);   // 0 at level 42, 1 at 5000
     return {
       cols: Math.min(8, 4 + Math.floor((L + 1) / 3)),
       rows: Math.min(9, 4 + Math.floor(L / 2.5)),
       layers: Math.min(5, 2 + Math.floor(L / 5)),
       target: Math.min(144, 24 + L * 4),
       carve: 0.08,
-      stack: L < 6 ? 0.6 : 0.85,
-      secPerTile: Math.max(1.5, 3.6 - L * 0.05),
+      stack: L < 6 ? 0.6 : Math.min(0.95, 0.85 + tail * 0.1),
+      secPerTile: L <= 42 ? Math.max(1.5, 3.6 - L * 0.05) : +(1.5 - tail * 0.35).toFixed(3),
       shuffles: L < 8 ? 3 : L < 20 ? 2 : 1,
-      hints: L < 8 ? 3 : L < 20 ? 2 : 1,
+      hints: L < 8 ? 3 : L < 20 ? 2 : L < 2500 ? 1 : 0,
       showFree: L <= 12
     };
   }
@@ -269,7 +274,7 @@
 
   var api = {
     KINDS: KINDS, Layout: Layout, isFree: isFree, freeTiles: freeTiles, freePairs: freePairs,
-    deal: deal, levelSpec: levelSpec, generate: generate, generateLevel: generateLevel,
+    deal: deal, levelSpec: levelSpec, MAX_LEVEL: MAX_LEVEL, generate: generate, generateLevel: generateLevel,
     generateDaily: generateDaily, generateDuel: generateDuel, reshuffle: reshuffle,
     points: points, aiPick: aiPick, mulberry32: mulberry32, hash: hash
   };

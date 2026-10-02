@@ -2,7 +2,7 @@
   "name": "jade-rush",
   "version": "1.0.0",
   "private": true,
-  "description": "Jade Rush: a timed Mahjong tile-matching game with endless levels and duels.",
+  "description": "Jade Rush: a timed Mahjong tile-matching game with 5,000 levels and duels.",
   "scripts": {
     "test": "node tests/mahjong.test.js",
     "build": "node tools/build-www.mjs",

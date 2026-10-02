@@ -11,7 +11,7 @@
 
   // ------------------------------------------------------------- storage
   var SAVE_KEY = 'jaderush.v1';
-  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true };
+  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true, done: false };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
   function totalStars() { var s = 0; for (var k in store.stars) s += store.stars[k]; return s; }
@@ -23,19 +23,10 @@
   function autoLite() { return (navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2); }
   window.JadeLite = store.lite == null ? !!autoLite() : !!store.lite;
 
-  // ------------------------------------------------------------- tile sets, chapters, juice
+  // ------------------------------------------------------------- tile sets, juice
   var THEMES = window.MahjongTiles.THEMES;
-  var CHAPTERS = [
-    { name: 'Bamboo Grove', color: '#2ee6b6' }, { name: 'Lotus Pond', color: '#ff6fae' },
-    { name: 'Koi River', color: '#ff8a5c' }, { name: 'Moon Gate', color: '#47b8ff' },
-    { name: 'Plum Blossom', color: '#ff5f6d' }, { name: 'Dragon Peak', color: '#a879ff' },
-    { name: 'Golden Pagoda', color: '#ffc94a' }, { name: 'Cloud Palace', color: '#7cffcb' }
-  ];
-  var ROMAN = ['', '', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X'];
-  function chapterOf(L) {
-    var idx = Math.floor((L - 1) / 10), c = CHAPTERS[idx % CHAPTERS.length], cycle = Math.floor(idx / CHAPTERS.length) + 1;
-    return { n: idx + 1, name: c.name + (cycle === 1 ? '' : ROMAN[cycle] || ' ' + cycle), color: c.color };
-  }
+  var MAX = M.MAX_LEVEL;
+  var fmt = function (n) { return n.toLocaleString('en-US'); };
   function currentTheme() {
     var t = THEMES.filter(function (x) { return x.id === store.theme; })[0];
     return t && totalStars() >= t.stars ? t : THEMES[0];
@@ -223,32 +214,30 @@
   // ------------------------------------------------------------- home
   function refreshHome() {
     var d = store.daily[dayKey()];
-    var ch = chapterOf(store.level);
-    $('continue-label').textContent = 'Level ' + store.level;
-    $('continue-chapter').textContent = 'Chapter ' + ch.n + ' · ' + ch.name;
-    $('btn-continue').style.setProperty('--chapter', ch.color);
+    var cleared = store.done ? MAX : store.level - 1;
+    $('continue-label').textContent = 'Level ' + fmt(store.level);
+    $('continue-eyebrow').textContent = store.done ? 'Journey complete' : 'Journey · ' + fmt(MAX) + ' levels';
     var unlocked = THEMES.filter(function (t) { return totalStars() >= t.stars; }).length;
     $('themes-meta').textContent = unlocked + ' of ' + THEMES.length + ' unlocked';
-    $('continue-meta').textContent = 'Endless levels · ' + totalStars() + ' ★ collected';
-    $('levels-meta').textContent = (store.level - 1) + ' cleared';
+    $('continue-meta').textContent = fmt(cleared) + ' cleared · ' + fmt(totalStars()) + ' ★ collected';
+    $('levels-meta').textContent = fmt(cleared) + ' of ' + fmt(MAX) + ' cleared';
     $('daily-meta').textContent = d ? 'Done today · ' + '★★★'.slice(0, d)
       : store.streak.n > 1 && store.streak.last === dayKey(-1) ? store.streak.n + '-day streak' : 'New every day';
     $('ai-meta').textContent = store.wins.ai ? store.wins.ai + ' wins' : '3 levels';
   }
+  // One continuous map, built in blocks of 100 so the browser skips laying out the ones off screen.
   function renderLevelGrid() {
-    var grid = $('level-grid'), html = '', last = Math.ceil((store.level + 5) / 10) * 10;
+    var grid = $('level-grid'), html = '', last = Math.min(MAX, Math.ceil((store.level + 20) / 100) * 100);
     for (var L = 1; L <= last; L++) {
-      if ((L - 1) % 10 === 0) {
-        var ch = chapterOf(L), got = 0;
-        for (var q = L; q < L + 10; q++) got += store.stars[q] || 0;
-        html += (L > 1 ? '</div></section>' : '') + '<section class="chapter" style="--c:' + ch.color + '"><h3>' + ch.name + '<span>' + got + ' / 30 ★</span></h3><div class="level-grid">';
-      }
+      if ((L - 1) % 100 === 0) html += (L > 1 ? '</div>' : '') + '<div class="level-grid">';
       var s = store.stars[L] || 0, locked = L > store.level;
-      html += '<button class="lvl' + (L === store.level ? ' current' : '') + '" data-level="' + L + '"' + (locked ? ' disabled' : '') + '>' + L +
+      html += '<button class="lvl' + (L === store.level && !store.done ? ' current' : '') + '" data-level="' + L + '"' + (locked ? ' disabled' : '') + '>' + L +
         '<small>' + (locked ? '' : '★★★'.slice(0, s) || '·') + '</small></button>';
     }
-    grid.innerHTML = html + '</div></section>';
-    $('levels-stars').textContent = totalStars() + ' ★';
+    html += '</div>';
+    if (last < MAX) html += '<p class="level-more">' + fmt(MAX - last) + ' more levels ahead, up to Level ' + fmt(MAX) + '</p>';
+    grid.innerHTML = html;
+    $('levels-stars').textContent = fmt(totalStars()) + ' ★';
     var cur = grid.querySelector('.current'); if (cur) cur.scrollIntoView({ block: 'center' });
   }
 
@@ -279,7 +268,7 @@
       rival: { left: gen.layout.n, done: false, out: false, score: 0 }
     });
     G.timeLeft = G.limit;
-    if (cfg.mode === 'journey') { var ch = chapterOf(cfg.level); setTitle(cfg.title, ch.name, ch.color); }
+    if (cfg.mode === 'journey') setTitle(cfg.title, 'of ' + fmt(MAX), null);
     else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : 'Race', null);
     var pausable = cfg.mode !== 'online';
     $('btn-quit').textContent = pausable ? '❚❚' : '←'; $('btn-quit').setAttribute('aria-label', pausable ? 'Pause' : 'Leave race');
@@ -295,8 +284,9 @@
   }
 
   function startLevel(level) {
-    startTimed(M.generateLevel(level), { mode: 'journey', level: level, title: 'Level ' + level });
-    setTimeout(function () { M.generateLevel(level + 1); }, 500);
+    level = Math.max(1, Math.min(MAX, level));
+    startTimed(M.generateLevel(level), { mode: 'journey', level: level, title: 'Level ' + fmt(level) });
+    if (level < MAX) setTimeout(function () { M.generateLevel(level + 1); }, 500);
     if (level === 1 && !store.seenHowto) { store.seenHowto = true; save(); G.paused = true; howTo(function () { G.paused = false; }); }
   }
   function startDaily() { startTimed(M.generateDaily(dayKey()), { mode: 'daily', title: 'Daily board' }); }
@@ -381,11 +371,23 @@
     var L = G.level, newBest = G.score > (store.best[L] || 0);
     if (stars > (store.stars[L] || 0)) store.stars[L] = stars;
     if (newBest) store.best[L] = G.score;
-    if (L === store.level) store.level++;
+    var finale = L === MAX && !store.done;
+    if (L === store.level) { if (L < MAX) store.level++; else store.done = true; }
     save();
     if (newBest) title += ' · new best';
     Ads.boardFinished();
-    modal({ title: title, stars: stars, body: grid, adGate: L, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Replay', run: function () { startLevel(L); } }, { label: 'Next level', primary: true, run: function () { startLevel(L + 1); } }] });
+    if (finale) {
+      confetti.burst(400);
+      var wrap = document.createElement('div'), msg = document.createElement('p');
+      msg.className = 'finale';
+      msg.textContent = 'You cleared all ' + fmt(MAX) + ' levels of Jade Rush with ' + fmt(totalStars()) + ' ★. Replay any level from the map to chase three stars.';
+      wrap.appendChild(msg); wrap.appendChild(grid);
+      modal({ title: 'Journey complete!', stars: stars, body: wrap, back: function () { closeModal(); show('home'); },
+        actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Level map', primary: true, run: function () { renderLevelGrid(); show('levels'); } }] });
+      return;
+    }
+    var next = L < MAX ? { label: 'Next level', primary: true, run: function () { startLevel(L + 1); } } : { label: 'Level map', primary: true, run: function () { renderLevelGrid(); show('levels'); } };
+    modal({ title: title, stars: stars, body: grid, adGate: L, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Replay', run: function () { startLevel(L); } }, next] });
   }
 
   function timedFail(reason) {

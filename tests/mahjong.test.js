@@ -30,6 +30,25 @@ for (let L = 1; L <= 150; L++) {
   }
 }
 console.log('slowest generation', slowest, 'ms');
+
+// The whole 5000-level journey: every board generates, is solvable, and difficulty never eases off.
+assert.strictEqual(M.MAX_LEVEL, 5000);
+let prev = M.levelSpec(1), t5000 = Date.now();
+for (let L = 151; L <= M.MAX_LEVEL; L++) {
+  const g = M.generateLevel(L);
+  replay(g);
+  assert.ok(g.layout.n >= 120, `level ${L} is full size (${g.layout.n})`);
+}
+for (let L = 2; L <= M.MAX_LEVEL; L++) {
+  const s = M.levelSpec(L);
+  assert.ok(s.secPerTile <= prev.secPerTile && s.hints <= prev.hints && s.shuffles <= prev.shuffles && s.shuffles >= 1, `level ${L} is not easier than ${L - 1}`);
+  prev = s;
+}
+for (const L of [500, 1000, 2500, 5000]) {
+  const s = M.levelSpec(L), g = M.generateLevel(L);
+  console.log(`level ${L}: ${g.layout.n} tiles, ${Math.round(g.layout.n * s.secPerTile)}s, ${s.hints} hints, ${s.shuffles} shuffle`);
+}
+console.log('levels 151-5000 checked in', Date.now() - t5000, 'ms');
 replay(M.generateDaily('2026-10-01'));
 replay(M.generateDuel(12345, 'big'));
 

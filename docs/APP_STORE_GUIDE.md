@@ -60,7 +60,7 @@ The app already includes Google's `GADApplicationIdentifier`, the SKAdNetwork li
 
 **Subtitle** (30 characters): `Wooden Mahjong. Beat the clock`
 
-**Promotional text** (170): `Endless Mahjong levels, combo slams and online duels with friends. A new board every day.`
+**Promotional text** (170): `5,000 Mahjong levels, combo slams and online duels with friends. A new board every day.`
 
 **Description**: use the full description from `docs/PLAY_STORE_GUIDE.md`, removing the line about Facebook (Facebook sign-in is Android-only for now).
 
@@ -122,5 +122,5 @@ Sign-in required: **No**.
 ## Notes on review rules
 
 * **Facebook sign-in is not in the iOS build.** App Review guideline 4.8 expects Sign in with Apple wherever a third-party login is offered. It can be added later together with Sign in with Apple.
-* **Guideline 4.2 (minimum functionality)**: the app is a full native-feeling game with offline play, haptics and endless levels, which is fine.
+* **Guideline 4.2 (minimum functionality)**: the app is a full native-feeling game with offline play, haptics and 5,000 levels, which is fine.
 * Ads never appear during play or before level 3, which keeps it within guideline 3.1/5.6 expectations for ad placement.

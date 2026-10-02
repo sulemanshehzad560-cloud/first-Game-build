@@ -1,6 +1,6 @@
 # Jade Rush
 
-A Mahjong tile-matching game with **endless levels**, a clock to beat, and **two-player duels**, including online play.
+A Mahjong tile-matching game with **5,000 levels**, a clock to beat, and **two-player duels**, including online play.
 It's plain HTML, CSS and JavaScript, with no build step and no server to run.
 
 ## How it plays
@@ -10,7 +10,7 @@ Most kinds have four copies, so taking the wrong pair can bury the tile you need
 
 | Mode | Goal |
 | --- | --- |
-| **Journey** | Clear the board before the clock runs out. Levels are generated from their number, so they never end. Boards get bigger and taller, the clock gets tighter, hints and shuffles get scarcer, and from level 13 free tiles are no longer highlighted. Clear fast without hints for 3 ★. |
+| **Journey** | Clear the board before the clock runs out. 5,000 levels in one continuous journey (no chapters). Each level is generated from its number and checked to be solvable, so they take no extra space. Boards grow to the full 144 tiles by level 30, free tiles stop being highlighted after level 12, and from there the clock keeps tightening and the piles get taller all the way to level 5,000 (hints run out at level 2,500). Clear fast without hints for 3 ★. |
 | **Daily board** | One shared board per calendar day, with a streak counter. |
 | **Online: Race** | Both players get the same board. You can see your rival's progress live. First to clear wins; if both run out, fewer tiles left wins. |
 | **Online: Take turns** | One shared board. Each turn you make one match, with 15 seconds per turn. Winds and dragons are worth 2 points. Highest score wins. |
