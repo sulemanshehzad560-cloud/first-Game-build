@@ -70,5 +70,12 @@
     console.log('SELFTEST DONE pass=' + pass + ' fail=' + fail);
   }
 
-  Shell.buildInfo().then(function (info) { if (info.selfTest) setTimeout(function () { run(info); }, 500); });
+  // CI's macOS runners have no GPU, so the simulator draws the animated sky in software; run the test in
+  // battery-saver mode (same game logic, far less drawing). Set it once, reload, then run.
+  Shell.buildInfo().then(function (info) {
+    if (!info.selfTest) return;
+    var saved = {}; try { saved = JSON.parse(localStorage.getItem('jaderush.v1') || '{}'); } catch (e) { /* fresh */ }
+    if (saved.lite !== true) { saved.lite = true; localStorage.setItem('jaderush.v1', JSON.stringify(saved)); location.reload(); return; }
+    setTimeout(function () { run(info); }, 500);
+  });
 })(this);
