@@ -62,10 +62,17 @@ async function connect() {
   let fallback = null;
   for (let attempt = 0; attempt < 15; attempt++) {
     const views = device.webViews().filter(v => v.pkg() === PKG).reverse();
+    // One DevTools socket serves every WebView in the process, and the AdMob SDK keeps its own hidden
+    // pages there; v.page() can hand back one of those, so look through all pages of the context.
+    const candidates = [];
     for (const v of views) {
-      const p = await v.page().catch(() => null);
-      if (!p) continue;
-      fallback = fallback || p;
+      const first = await v.page().catch(() => null);
+      if (!first) continue;
+      for (const q of [first, ...first.context().pages()]) if (!candidates.includes(q)) candidates.push(q);
+    }
+    if (attempt === 0 || attempt % 5 === 4) console.log('   pages: ' + candidates.map(q => q.url()).join(' | '));
+    for (const p of candidates) {
+      if (/^https?:\/\/localhost\//.test(p.url())) fallback = fallback || p;
       const why = await liveReason(p);
       if (why) { if (attempt % 5 === 0) console.log('   page not live yet: ' + why); continue; }
       page = p;
@@ -77,13 +84,13 @@ async function connect() {
       });
       await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
       if (process.env.E2E_VARIANT === 'no-lite-css') await page.evaluate(() => document.documentElement.classList.remove('lite'));
-      if (attempt || views.length > 1) console.log(`   attached to the live page (${views.length} WebView(s), attempt ${attempt + 1})`);
+      if (attempt || candidates.length > 1) console.log(`   attached to the live page ${p.url()} (${candidates.length} page(s), attempt ${attempt + 1})`);
       return;
     }
     await sleep(2000);
   }
-  if (!fallback) throw new Error('no WebView page for ' + PKG);
-  console.log('   no page proved live; using the only page available');
+  if (!fallback) throw new Error('no app page (https://localhost/) in the WebViews of ' + PKG);
+  console.log('   no page proved live; using the app page ' + fallback.url());
   page = fallback;
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error' && !/^Error injecting safe area CSS/.test(m.text())) errors.push('console: ' + m.text()); });

@@ -16,6 +16,9 @@
     b.c.dispatchEvent(new PointerEvent('pointerdown', { clientX: c.left + r.x + r.w / 2, clientY: c.top + r.y + r.h / 2, bubbles: true, pointerType: 'touch' }));
   }
   function clickText(t) { var b = Array.prototype.find.call(document.querySelectorAll('#modal-actions button'), function (x) { return x.textContent === t; }); if (b) b.click(); return !!b; }
+  // The CI simulator renders in software and can be slow, so wait on conditions instead of fixed sleeps.
+  async function until(fn, ms) { for (var t = 0; t < ms; t += 200) { try { if (fn()) return true; } catch (e) { /* not yet */ } await sleep(200); } return false; }
+  function boardReady() { var b = global.JadeRush.board, G = global.JadeRush.state(); return !$('game').hidden && G && G.gen && b.c.getBoundingClientRect().width > 0 && b.rect(0).w > 0 && !b.busy(); }
   async function step(name, fn) { try { await fn(); } catch (e) { check(false, name + ' threw: ' + (e && e.message)); } }
 
   async function run(info) {
@@ -34,17 +37,22 @@
       check(true, 'Safe area: ' + (top || 'n/a'));
     });
     await step('level 1', async function () {
-      $('btn-continue').click(); await sleep(2600);
+      $('btn-continue').click(); await until(boardReady, 15000); await sleep(1500);
       console.log('SELFTEST SHOT level');
       var sol = global.JadeRush.state().gen.solution;
-      for (var k = 0; k < sol.length; k++) { tap(sol[k][0]); await sleep(120); tap(sol[k][1]); await sleep(450); }
-      await sleep(1500);
+      for (var k = 0; k < sol.length; k++) { tap(sol[k][0]); await sleep(150); tap(sol[k][1]); await sleep(450); }
+      // If a tap was lost on a slow frame, finish with whatever free pairs remain.
+      for (var n = 0; n < 40 && global.JadeRush.state().left > 0 && !global.JadeRush.state().over; n++) {
+        var G = global.JadeRush.state(), fp = global.Mahjong.freePairs(G.lay, G.present, G.kinds)[0];
+        if (!fp) break; tap(fp[0]); await sleep(150); tap(fp[1]); await sleep(450);
+      }
+      await until(function () { return /cleared|Flawless/i.test($('modal-title').textContent); }, 8000);
       console.log('SELFTEST SHOT cleared');
       check(/cleared|Flawless/i.test($('modal-title').textContent), 'Level 1 cleared: ' + $('modal-title').textContent);
       check(JSON.parse(localStorage.getItem('jaderush.v1')).level === 2, 'Progress saved');
     });
     await step('pause', async function () {
-      document.querySelector('#modal-actions .primary').click(); await sleep(2600);
+      document.querySelector('#modal-actions .primary').click(); await until(boardReady, 15000); await sleep(800);
       $('btn-quit').click(); await sleep(600);
       var t1 = global.JadeRush.state().timeLeft; await sleep(2000);
       check(Math.abs(global.JadeRush.state().timeLeft - t1) < 50, 'Pause stops the clock');
@@ -53,9 +61,16 @@
     });
     await step('duel', async function () {
       $('btn-ai').click(); await sleep(500);
-      document.querySelector('#modal-actions .primary').click(); await sleep(2600);
-      var G = global.JadeRush.state(), pr = global.Mahjong.freePairs(G.lay, G.present, G.kinds)[0];
-      tap(pr[0]); await sleep(150); tap(pr[1]); await sleep(4500);
+      document.querySelector('#modal-actions .primary').click(); await until(boardReady, 15000); await sleep(800);
+      var G = global.JadeRush.state();
+      // Make one match on our turn (the computer may move first), then wait for the computer's reply.
+      for (var n = 0; n < 30 && !(G.scores[G.me || 0] > 0); n++) {
+        if (G.turn === (G.me || 0) && !global.JadeRush.board.busy()) {
+          var pr = global.Mahjong.freePairs(G.lay, G.present, G.kinds)[0]; tap(pr[0]); await sleep(150); tap(pr[1]);
+        }
+        await sleep(500);
+      }
+      await until(function () { var s = global.JadeRush.state().scores; return s[0] > 0 && s[1] > 0; }, 12000);
       console.log('SELFTEST SHOT duel');
       var s = global.JadeRush.state().scores;
       check(s[0] > 0 && s[1] > 0, 'Duel: both players scored (' + s.join('-') + ')');
@@ -75,7 +90,7 @@
   Shell.buildInfo().then(function (info) {
     if (!info.selfTest) return;
     var saved = {}; try { saved = JSON.parse(localStorage.getItem('jaderush.v1') || '{}'); } catch (e) { /* fresh */ }
-    if (saved.lite !== true) { saved.lite = true; localStorage.setItem('jaderush.v1', JSON.stringify(saved)); location.reload(); return; }
+    if (saved.lite !== true) { saved.lite = true; saved.seenHowto = true; localStorage.setItem('jaderush.v1', JSON.stringify(saved)); location.reload(); return; }
     setTimeout(function () { run(info); }, 500);
   });
 })(this);

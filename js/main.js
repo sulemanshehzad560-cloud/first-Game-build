@@ -1134,13 +1134,18 @@
     modal({ kind: 'themes', eyebrow: '★ ' + fmt(stars) + ' collected', title: 'Tile sets', body: box, back: function () { closeModal(); finish(); }, actions: [{ label: 'Done', primary: true, run: finish }] });
     // One preview per frame, each drawn once and then copied from a cache, so opening (or re-opening after
     // switching sets) never blocks the app for long on slow phones.
-    var cvs = grid.querySelectorAll('canvas'), k = 0;
+    var cvs = grid.querySelectorAll('canvas'), k = 0, tries = 0;
     (function nextPreview() {
       if (k >= cvs.length || !cvs[k].isConnected) return;
       var c = cvs[k], t = THEMES[k], r = c.getBoundingClientRect(), key = t.id + ':' + Math.round(r.width) + 'x' + Math.round(r.height);
-      if (!previewCache[key]) { var off = document.createElement('canvas'); off.style.width = r.width + 'px'; off.style.height = r.height + 'px'; drawPreview(off, t, r); previewCache[key] = off; }
-      var src = previewCache[key];
-      c.width = src.width; c.height = src.height; c.getContext('2d').drawImage(src, 0, 0);
+      // Not laid out yet (sheet still animating in): try again next frame, but never draw from an empty canvas,
+      // which WebKit rejects with InvalidStateError.
+      if (r.width < 4 || r.height < 4) { if (++tries < 60) requestAnimationFrame(nextPreview); return; }
+      try {
+        if (!previewCache[key]) { var off = document.createElement('canvas'); off.style.width = r.width + 'px'; off.style.height = r.height + 'px'; drawPreview(off, t, r); if (off.width && off.height) previewCache[key] = off; }
+        var src = previewCache[key];
+        if (src) { c.width = src.width; c.height = src.height; c.getContext('2d').drawImage(src, 0, 0); }
+      } catch (e) { /* a preview is decoration; never let it break the picker */ }
       k++; requestAnimationFrame(nextPreview);
     })();
   }
