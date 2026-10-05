@@ -1097,10 +1097,12 @@
   }
 
   // ------------------------------------------------------------- tile sets
-  function drawPreview(canvas, theme) {
-    var r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-    canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+  var previewCache = {};
+  function drawPreview(canvas, theme, rect) {
+    var r = rect || canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, window.JadeLite ? 1.5 : 2.5);
+    // the renderer sizes its canvas from layout when created; an offscreen canvas measures 0, so size it after
     var pb = new window.TileBoard(canvas), g = canvas.getContext('2d');
+    canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
     pb.setTheme(theme); pb.dpr = dpr;
     pb.fh = r.height * 0.8; pb.fw = pb.fh / 1.3; pb.dz = pb.fw * 0.1;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1130,9 +1132,17 @@
     box.appendChild(p); box.appendChild(grid);
     var finish = function () { refreshHome(); if (after) after(); };
     modal({ kind: 'themes', eyebrow: '★ ' + fmt(stars) + ' collected', title: 'Tile sets', body: box, back: function () { closeModal(); finish(); }, actions: [{ label: 'Done', primary: true, run: finish }] });
-    requestAnimationFrame(function () {
-      grid.querySelectorAll('canvas').forEach(function (c, k) { drawPreview(c, THEMES[k]); });
-    });
+    // One preview per frame, each drawn once and then copied from a cache, so opening (or re-opening after
+    // switching sets) never blocks the app for long on slow phones.
+    var cvs = grid.querySelectorAll('canvas'), k = 0;
+    (function nextPreview() {
+      if (k >= cvs.length || !cvs[k].isConnected) return;
+      var c = cvs[k], t = THEMES[k], r = c.getBoundingClientRect(), key = t.id + ':' + Math.round(r.width) + 'x' + Math.round(r.height);
+      if (!previewCache[key]) { var off = document.createElement('canvas'); off.style.width = r.width + 'px'; off.style.height = r.height + 'px'; drawPreview(off, t, r); previewCache[key] = off; }
+      var src = previewCache[key];
+      c.width = src.width; c.height = src.height; c.getContext('2d').drawImage(src, 0, 0);
+      k++; requestAnimationFrame(nextPreview);
+    })();
   }
 
   // ------------------------------------------------------------- how to play
