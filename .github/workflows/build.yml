@@ -278,9 +278,10 @@ jobs:
         env:
           CODE: ${{ needs.build.outputs.code }}
         run: |
-          cd dist
-          # GitHub refuses files over 100 MB, and the app is bigger than that now: split those into
-          # 90 MB parts (rejoin with: cat name.part-* > name).
+          # A git branch refuses files over 100 MB, and the app is bigger than that now: the branch copy
+          # splits those into 90 MB parts (rejoin with: cat name.part-* > name). The GitHub release
+          # below keeps every file whole, so it has one download link per build.
+          cp -r dist branch && cd branch
           for f in *; do
             if [ "$(stat -c %s "$f")" -gt 95000000 ]; then split -b 90m -d "$f" "$f.part-" && rm "$f" && echo "split $f"; fi
           done
