@@ -152,6 +152,50 @@ jobs:
           name: emulator-results
           path: e2e-out/
 
+  # Temporary experiment: the same APK on several emulators, with and without the battery-saver CSS,
+  # to find what makes the emulator's graphics backend die when a level starts. Never blocks a release.
+  emulator-probe:
+    name: Emulator probe (${{ matrix.variant }} ${{ matrix.rep }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [lite-css, no-lite-css]
+        rep: [1, 2]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: builds
+          path: dist
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Test tools
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        run: npm install --no-save playwright@1.56.1
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run the e2e once
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          E2E_VARIANT: ${{ matrix.variant }}
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: DEBUG_APK=$(ls dist/*-debug.apk) timeout 1200 node ci/android-e2e.mjs
+
   ios:
     name: iOS build and simulator test
     runs-on: macos-latest

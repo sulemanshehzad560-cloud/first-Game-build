@@ -43,6 +43,7 @@ async function connect() {
       page.on('pageerror', e => errors.push('pageerror: ' + e.message));
       page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
       await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
+      if (process.env.E2E_VARIANT === 'no-lite-css') await page.evaluate(() => document.documentElement.classList.remove('lite'));
       if (attempt || views.length > 1) console.log(`   attached to the live page (${views.length} WebView(s), attempt ${attempt + 1})`);
       return;
     }
@@ -79,6 +80,8 @@ await step('launch', async () => {
   await sleep(1500);
   await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
   if (!(await isLive(page))) await connect();
+  else if (process.env.E2E_VARIANT === 'no-lite-css') await page.evaluate(() => document.documentElement.classList.remove('lite'));
+  if (process.env.E2E_VARIANT) console.log('   variant ' + process.env.E2E_VARIANT + ', lite class: ' + await page.evaluate(() => document.documentElement.classList.contains('lite')));
   await sleep(2500); await shot('01-home');
 });
 
