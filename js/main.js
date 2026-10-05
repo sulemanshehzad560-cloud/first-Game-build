@@ -1075,6 +1075,7 @@
     return row;
   }
   function openSettings(after) {
+    if (typeof after !== 'function') after = null;
     var done = function () { refreshHome(); if (after) after(); };
     var box = document.createElement('div'); box.className = 'settings';
     var group = function (name) { var h = document.createElement('p'); h.className = 'settings-group'; h.textContent = name; box.appendChild(h); };
@@ -1109,6 +1110,7 @@
     });
   }
   function openThemes(after) {
+    if (typeof after !== 'function') after = null;
     var stars = totalStars(), cur = currentTheme(), box = document.createElement('div');
     box.style.display = 'grid'; box.style.gap = '12px';
     var p = document.createElement('p'); p.className = 'themes-intro'; p.textContent = 'Six woods, each with its own table and night sky. Earn stars to unlock them.';
@@ -1136,6 +1138,7 @@
   // ------------------------------------------------------------- how to play
   // An illustrated, swipeable card deck. The art is built from mini tiles in HTML, so it is crisp and cheap.
   function howTo(after) {
+    if (typeof after !== 'function') after = null;
     var t = function (g, cls) { return '<span class="mt' + (cls ? ' ' + cls : '') + '">' + g + '</span>'; };
     var cards = [
       ['Match the pairs', 'Tap two identical tiles to clear them. Clear the whole board to win.',
@@ -1224,7 +1227,7 @@
     $('board').style.cursor = board.hover >= 0 ? 'pointer' : 'default';
   });
   $('board').addEventListener('pointerleave', function () { board.setHover(-1); });
-  $('btn-themes').addEventListener('click', openThemes);
+  $('btn-themes').addEventListener('click', function () { openThemes(); });
   document.addEventListener('pointerdown', function (e) {
     // A tap on the open sky behind the home screen lets a lantern go.
     if (e.target === $('bg') && !$('home').hidden) { A.unlock(); if (sky.release(e.clientX, e.clientY) !== false) { A.chime(); buzz(8); } return; }
