@@ -279,6 +279,11 @@ jobs:
           CODE: ${{ needs.build.outputs.code }}
         run: |
           cd dist
+          # GitHub refuses files over 100 MB, and the app is bigger than that now: split those into
+          # 90 MB parts (rejoin with: cat name.part-* > name).
+          for f in *; do
+            if [ "$(stat -c %s "$f")" -gt 95000000 ]; then split -b 90m -d "$f" "$f.part-" && rm "$f" && echo "split $f"; fi
+          done
           git init -q -b ci-builds
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

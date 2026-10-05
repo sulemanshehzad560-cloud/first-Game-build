@@ -3,7 +3,7 @@ import { cpSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 const out = 'www';
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
-for (const p of ['index.html', 'privacy.html', 'data-deletion.html', 'webview-update.html', 'favicon.png', 'css', 'js', 'fonts', 'vendor']) {
+for (const p of ['index.html', 'privacy.html', 'data-deletion.html', 'webview-update.html', 'favicon.png', 'css', 'js', 'fonts', 'vendor', 'assets']) {
   if (existsSync(p)) cpSync(p, `${out}/${p}`, { recursive: true });
 }
 // Keep the bundled Capacitor runtime in step with the installed @capacitor/core.

@@ -58,6 +58,9 @@ The game ships as an Android app built with [Capacitor](https://capacitorjs.com/
 | `js/ads.js` | AdMob interstitials and consent (no-op on the web). |
 | `js/social.js` | Facebook sign-in, profile and friends list (Android app only). |
 | `js/audio.js` | WebAudio tile clacks and combo chimes. |
+| `js/music.js` | Soundtrack and night ambience: two crossfading channels, paused in the background. |
+| `assets/` | Generated art and audio (about 110 MB): painted parallax scenery and wood textures for each tile set, 14 music pieces and 6 ambience loops. |
+| `tools/art/` | The generators for `assets/` (Python: numpy, scipy, Pillow; ffmpeg for audio). Fixed seeds, so `python3 tools/art/scenery.py`, `wood.py` and `music.py` reproduce the files. |
 
 ## Tests
 

@@ -442,9 +442,10 @@ svg { display: block; }
 .theme-card {
   position: relative; overflow: hidden; display: grid; gap: 5px; justify-items: center; padding: 14px 8px 12px;
   border-radius: 18px; border: 1px solid var(--line); color: var(--ink);
-  background: rgba(0,0,0,.3);
+  background: linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.55) 70%), var(--scene, none) center / cover, rgba(0,0,0,.3);
   transition: transform .25s var(--spring), border-color .2s;
 }
+.theme-card:disabled { filter: saturate(.55); }
 .theme-card::before { content: ''; position: absolute; left: 10%; right: 10%; top: -30%; height: 70%; border-radius: 50%; background: var(--wood); opacity: .18; filter: blur(18px); pointer-events: none; }
 .theme-card > * { position: relative; }
 .theme-card:active:not(:disabled) { transform: scale(.95); }

@@ -67,7 +67,9 @@
     } else this.entry = null;
   };
 
-  TileBoard.prototype.setTheme = function (theme) { this.theme = theme; this.accent = theme.accent; this.sprites.clear(); this.dirty = true; };
+  TileBoard.prototype.setTheme = function (theme) { this.theme = theme; this.accent = theme.accent; woodImage(theme.id, this); this.sprites.clear(); this.dirty = true; };
+  TileBoard.preloadWood = function (themes) { themes.forEach(function (t) { woodImage(t.id); }); };
+  TileBoard.woodReady = function (id) { return !!(woodTex[id] && woodTex[id].ok); };
 
   TileBoard.prototype.resize = function () {
     var rect = this.c.getBoundingClientRect(), dpr = Math.min(global.devicePixelRatio || 1, global.JadeLite ? 1.5 : 2.5);
@@ -110,9 +112,33 @@
 
   TileBoard.prototype.isFree = function (i) { return global.Mahjong.isFree(this.lay, this.present, i); };
 
+  // Photo-real wood (assets/wood, rendered by tools/art/wood.py), one texture per tile set. Boards waiting
+  // on a texture redraw once it arrives; until then (or without the file) the grain below is drawn in code.
+  var woodTex = {};
+  function woodImage(id, board) {
+    var w = woodTex[id];
+    if (!w) {
+      w = woodTex[id] = { img: new Image(), ok: false, wait: [] };
+      w.img.onload = function () { w.ok = true; w.wait.forEach(function (b) { if (b.theme.id === id) { b.sprites.clear(); b.dirty = true; if (b.onArt) b.onArt(); } }); w.wait = []; };
+      w.img.src = 'assets/wood/' + id + '.webp';
+    }
+    if (!w.ok && board && w.wait.indexOf(board) < 0) w.wait.push(board);
+    return w.ok ? w.img : null;
+  }
+
   // ---------------------------------------------------------------- sprites
   function woodGrain(g, x, y, w, h, th, seed) {
-    var rand = global.Mahjong.mulberry32(seed), k;
+    var rand = global.Mahjong.mulberry32(seed), k, tex = woodImage(th.id);
+    if (tex) {
+      // each variant shows a different patch of the board, sometimes turned end for end
+      var sw = tex.naturalWidth * (0.34 + rand() * 0.12), sh = sw * h / w;
+      var sx = rand() * (tex.naturalWidth - sw), sy = rand() * (tex.naturalHeight - sh);
+      g.save();
+      if (rand() < 0.5) { g.translate(x + w / 2, y + h / 2); g.rotate(Math.PI); g.translate(-x - w / 2, -y - h / 2); }
+      g.drawImage(tex, sx, sy, sw, sh, x, y, w, h);
+      g.restore();
+      return;
+    }
     var base = g.createLinearGradient(x, y, x + w, y + h);
     base.addColorStop(0, th.face[0]); base.addColorStop(1, th.face[1]);
     g.fillStyle = base; g.fillRect(x, y, w, h);
@@ -158,6 +184,12 @@
       rr(g, fx, fy + k, fw, fh, rad); g.fill();
     }
     g.save(); g.globalCompositeOperation = 'source-atop';
+    var etex = woodImage(th.id);
+    if (etex) {
+      g.globalAlpha = 0.3;
+      g.drawImage(etex, variant * 120, 0, fw * 4, (fh + d) * 2, fx, fy + fh * 0.5, fw, fh * 0.5 + d);
+      g.globalAlpha = 1;
+    }
     var shade = g.createLinearGradient(0, fy + fh - rad, 0, fy + fh + d);
     shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,0.35)');
     g.fillStyle = shade; g.fillRect(0, 0, W, H);

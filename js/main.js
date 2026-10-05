@@ -11,13 +11,15 @@
 
   // ------------------------------------------------------------- storage
   var SAVE_KEY = 'jaderush.v1';
-  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true, done: false };
+  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true, done: false, music: true, ambience: true };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
   function totalStars() { var s = 0; for (var k in store.stars) s += store.stars[k]; return s; }
   function dayKey(offset) { var d = new Date(Date.now() + (offset || 0) * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function fmtTime(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
   A.setEnabled(store.sound);
+  var Music = window.JadeMusic || { scene: function () {}, setMusic: function () {}, setAmbience: function () {} };
+  Music.setMusic(store.music !== false); Music.setAmbience(store.ambience !== false);
 
   // Battery saver: automatic on phones with 2 GB of RAM or less (or 2 cores), or switched on in Settings.
   function autoLite() { return (navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2); }
@@ -31,6 +33,8 @@
   var fmt = function (n) { return n.toLocaleString('en-US'); };
   // Line icons (24px grid, stroke = currentColor) for buttons, settings rows and stat cards.
   var ICON_PATHS = {
+    music: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+    leaf: '<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z"/><path d="M5 19l7-7"/>',
     play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
     restart: '<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/>',
     gear: '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4z"/>',
@@ -86,6 +90,34 @@
     var c = $('bg'), g = c.getContext('2d'), W = 0, H = 0, dpr = 1, theme = THEMES[0], drawn = false;
     var layers = [], skyCan = null, moonCan = null, moonA = 1, lantern = null, lanterns = [], stars = [], lastDraw = 0;
     var tilt = { x: 0, y: 0, tx: 0, ty: 0 }, moonState = null;
+    // Painted scenery (assets/scenery, rendered offline by tools/art/scenery.py): four parallax layers per
+    // tile set. Phones get the 1024-wide copies, big tablets the full 2048-wide ones. Until a set's art has
+    // loaded (or if it is missing, as in a bare web copy) the sky below is drawn in code instead.
+    var art = null, artKey = '', moonImg = null;
+    function artVariant() { return !window.JadeLite && innerWidth * Math.min(window.devicePixelRatio || 1, 1.5) > 1400 ? '' : '-lite'; }
+    function loadArt() {
+      var key = theme.id + artVariant();
+      if (key === artKey) return;
+      artKey = key;
+      var names = ['sky', 'far', 'mid', 'near'], imgs = {}, left = names.length, failed = false;
+      names.forEach(function (n) {
+        var im = new Image();
+        im.onload = function () {
+          if (--left || failed || artKey !== key) return;
+          art = imgs; build();
+        };
+        im.onerror = function () { failed = true; };
+        im.src = 'assets/scenery/' + theme.id + '/' + n + artVariant() + '.webp';
+        imgs[n] = im;
+      });
+      if (!moonImg) { var m = new Image(); m.onload = function () { moonImg = m; build(); }; m.src = 'assets/scenery/moon.webp'; }
+    }
+    // Where a scene layer lands: cover the area, centred, with the horizon kept near 62% of the height.
+    function place(im, w, h) {
+      var s = Math.max(w / im.naturalWidth, h / im.naturalHeight), dw = im.naturalWidth * s, dh = im.naturalHeight * s;
+      var y = Math.min(0, Math.max(h - dh, 0.62 * h - 0.62 * dh));
+      return [(w - dw) / 2, y, dw, dh];
+    }
     function mix(a, b, t) {
       var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
       var r = (x >> 16 & 255) * (1 - t) + (y >> 16 & 255) * t, gg = (x >> 8 & 255) * (1 - t) + (y >> 8 & 255) * t, bl = (x & 255) * (1 - t) + (y & 255) * t;
@@ -100,6 +132,8 @@
       var gr = k.createLinearGradient(0, 0, 0, H + M);
       gr.addColorStop(0, top); gr.addColorStop(0.45, mix(theme.bg[0], '#000000', 0.25)); gr.addColorStop(0.78, theme.bg[1]); gr.addColorStop(1, mix(theme.bg[1], theme.bg[3], 0.35));
       k.fillStyle = gr; k.fillRect(0, 0, W + M, H + M);
+      var painted = art && art.sky.complete && art.sky.naturalWidth;
+      if (painted) { var ps = place(art.sky, W + M, H + M); k.drawImage(art.sky, ps[0], ps[1], ps[2], ps[3]); }
       // the moon is its own sprite so it can set behind the game screen's panels
       var mr = Math.min(W, H) * 0.06, mm = canvas(mr * 14, mr * 14), mk = mm[1], mc = mr * 7;
       var halo = mk.createRadialGradient(mc, mc, mr * 0.5, mc, mc, mr * 7);
@@ -107,20 +141,31 @@
       mk.fillStyle = halo; mk.fillRect(0, 0, mr * 14, mr * 14);
       var moon = mk.createRadialGradient(mc - mr * 0.3, mc - mr * 0.3, mr * 0.1, mc, mc, mr);
       moon.addColorStop(0, '#fffaf0'); moon.addColorStop(1, mix('#fff1d0', theme.bg[3], 0.35));
-      mk.fillStyle = moon; mk.beginPath(); mk.arc(mc, mc, mr, 0, 6.283); mk.fill();
-      mk.fillStyle = 'rgba(160,140,110,.18)';
-      [[-0.3, -0.2, 0.22], [0.25, 0.15, 0.16], [-0.05, 0.4, 0.12]].forEach(function (cr) { mk.beginPath(); mk.arc(mc + cr[0] * mr, mc + cr[1] * mr, cr[2] * mr, 0, 6.283); mk.fill(); });
-      moonCan = { c: mm[0], s: mr * 14, x: W * 0.13, y: H * 0.16 };
+      if (moonImg) mk.drawImage(moonImg, mc - mr * 1.064, mc - mr * 1.064, mr * 2.128, mr * 2.128);
+      else {
+        mk.fillStyle = moon; mk.beginPath(); mk.arc(mc, mc, mr, 0, 6.283); mk.fill();
+        mk.fillStyle = 'rgba(160,140,110,.18)';
+        [[-0.3, -0.2, 0.22], [0.25, 0.15, 0.16], [-0.05, 0.4, 0.12]].forEach(function (cr) { mk.beginPath(); mk.arc(mc + cr[0] * mr, mc + cr[1] * mr, cr[2] * mr, 0, 6.283); mk.fill(); });
+      }
+      moonCan = { c: mm[0], s: mr * 14, x: W * 0.2, y: H * 0.15 };
       stars = [];
-      for (var n = 0; n < Math.round(W * H / 5000); n++) {
+      for (var n = 0; n < Math.round(W * H / (painted ? 14000 : 5000)); n++) {
         var st = { x: r() * (W + M), y: Math.pow(r(), 1.6) * H * 0.6, r: 0.4 + r() * 1.3, p: r() * 6.28, tw: r() < 0.3 };
+        if (painted && !st.tw) continue;   // the painting already has its still stars
         if (!st.tw) { k.fillStyle = 'rgba(255,248,230,' + (0.25 + r() * 0.5) + ')'; k.beginPath(); k.arc(st.x, st.y, st.r, 0, 6.283); k.fill(); }
         else stars.push(st);
       }
       skyCan = s[0];
       // three ridges, far to near, each with a band of mist above it
       layers = [];
-      [[0.62, 0.16, 0.28, 18], [0.72, 0.13, 0.55, 30], [0.84, 0.1, 0.82, 46]].forEach(function (L, idx) {
+      if (painted && art.far.naturalWidth && art.mid.naturalWidth && art.near.naturalWidth) {
+        [[art.far, 18], [art.mid, 30], [art.near, 46]].forEach(function (L) {
+          var lc = canvas(W + M * 2, H), pl = place(L[0], W + M * 2, H);
+          lc[1].drawImage(L[0], pl[0], pl[1], pl[2], pl[3]);
+          layers.push({ c: lc[0], depth: L[1] });
+        });
+      }
+      else [[0.62, 0.16, 0.28, 18], [0.72, 0.13, 0.55, 30], [0.84, 0.1, 0.82, 46]].forEach(function (L, idx) {
         var lw = W + M * 2, lc = canvas(lw, H), x = lc[1], base = H * L[0], amp = H * L[1];
         var ph = [r() * 6, r() * 6, r() * 6], col = mix(theme.bg[0], '#000000', L[2]);
         var mist = x.createLinearGradient(0, base - amp * 1.4, 0, base + amp * 0.2);
@@ -157,7 +202,7 @@
       dpr = Math.min(window.devicePixelRatio || 1, window.JadeLite ? 1 : 1.5);
       W = innerWidth; H = innerHeight;
       c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      build();
+      loadArt(); build();
       var want = window.JadeLite ? 5 : 14;
       while (lanterns.length < want) lanterns.push(newLantern(Math.random() * H * 1.2));
       lanterns.length = want;
@@ -224,7 +269,7 @@
     resize();
     return {
       frame: frame,
-      setTheme: function (t) { theme = t; build(); },
+      setTheme: function (t) { if (t.id !== theme.id) art = null; theme = t; loadArt(); build(); },
       resize: resize,
       release: function (x, y) {
         if (reduced || window.JadeLite) return false;   // a still sky cannot carry a lantern away
@@ -1081,6 +1126,8 @@
     var group = function (name) { var h = document.createElement('p'); h.className = 'settings-group'; h.textContent = name; box.appendChild(h); };
     group('Game feel');
     box.appendChild(toggleRow('Sound effects', store.sound, function (v) { store.sound = v; A.setEnabled(v); save(); if (v) A.select(); }, 'sound'));
+    box.appendChild(toggleRow('Music', store.music !== false, function (v) { store.music = v; save(); Music.setMusic(v); }, 'music'));
+    box.appendChild(toggleRow('Nature sounds', store.ambience !== false, function (v) { store.ambience = v; save(); Music.setAmbience(v); }, 'leaf'));
     box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }, 'vibrate'));
     box.appendChild(toggleRow('Battery saver (fewer effects)', window.JadeLite, function (v) {
       store.lite = v; window.JadeLite = v; save(); refreshSkyHint(); board.resize(); demo.resize(); sky.resize();
@@ -1123,6 +1170,7 @@
       b.setAttribute('aria-pressed', String(t.id === cur.id));
       b.innerHTML = '<canvas></canvas><b></b><small></small>' + (locked ? '<span class="unlock"><i></i></span>' : '');
       b.style.setProperty('--wood', t.face[0]); b.style.setProperty('--wood2', t.body[1]);
+      b.style.setProperty('--scene', 'url("' + new URL('assets/scenery/' + t.id + '/thumb.webp', location.href).href + '")');
       b.querySelector('b').textContent = t.name;
       b.querySelector('small').innerHTML = locked ? icon('lock', 13) + ' ' + fmt(stars) + ' / ' + t.stars + ' ★' : t.id === cur.id ? '✓ In use' : 'Tap to use';
       if (locked) b.querySelector('.unlock i').style.width = Math.round(100 * stars / t.stars) + '%';
@@ -1137,7 +1185,7 @@
     var cvs = grid.querySelectorAll('canvas'), k = 0, tries = 0;
     (function nextPreview() {
       if (k >= cvs.length || !cvs[k].isConnected) return;
-      var c = cvs[k], t = THEMES[k], r = c.getBoundingClientRect(), key = t.id + ':' + Math.round(r.width) + 'x' + Math.round(r.height);
+      var c = cvs[k], t = THEMES[k], r = c.getBoundingClientRect(), key = t.id + ':' + Math.round(r.width) + 'x' + Math.round(r.height) + (window.TileBoard.woodReady(t.id) ? ':w' : '');
       // Not laid out yet (sheet still animating in): try again next frame, but never draw from an empty canvas,
       // which WebKit rejects with InvalidStateError.
       if (r.width < 4 || r.height < 4) { if (++tries < 60) requestAnimationFrame(nextPreview); return; }
@@ -1322,11 +1370,17 @@
   }
 
   // ------------------------------------------------------------- loop & boot
-  var last = performance.now();
+  var last = performance.now(), lastScene = 0;
+  // Menus play the menu theme; a board plays its world's two pieces in turn; duels get the drums.
+  function musicScene() {
+    var t = currentTheme().id, inGame = !$('game').hidden && G.lay;
+    return { music: !inGame ? 'menu' : (G.mode === 'journey' || G.mode === 'daily') && G.duel !== 'race' && !isTurns() ? t : 'duel', ambience: t };
+  }
   function loop(now) {
     var dt = Math.min(250, now - last); last = now;
     sky.frame(now);
     confetti.frame(dt);
+    if (now - lastScene > 500) { lastScene = now; Music.scene(musicScene()); }
     if (!$('home').hidden) { stepDemo(now); demo.frame(now); }
     if (!$('game').hidden && G.lay && !isTurns() && G.limit) {
       if (G.shownScore !== G.score) {
@@ -1356,6 +1410,8 @@
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { setTimeout(hideLoader, 250); });
   setTimeout(hideLoader, 1500);
   demo.resize(); newDemo();
+  // fetch the other tile sets' wood once the first screen is up, so Tile sets opens with real textures
+  setTimeout(function () { if (!window.JadeLite) window.TileBoard.preloadWood(THEMES); }, 4000);
   requestAnimationFrame(loop);
   var room = new URLSearchParams(location.search).get('room');
   if (room && /^[A-Za-z0-9]{5}$/.test(room)) {
