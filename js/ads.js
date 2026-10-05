@@ -3,6 +3,9 @@
  * Ads only appear between boards, never during play: at most one every 2 finished boards,
  * at least 2 minutes apart, and never before level 3. Debug builds always use Google's test ads.
  * Consent (GDPR/UMP) is requested on launch and can be changed later from Settings.
+ * The ad itself is fetched while the player sits on a result screen, never while a board is starting:
+ * an ad loads into its own WebView, and doing that during the board's opening animation makes budget
+ * phones stutter. An ad is only shown after two finished boards, so loading after the first is in time.
  */
 (function (global) {
   'use strict';
@@ -21,7 +24,7 @@
     if (!ready || loaded || loading) return;
     loading = true;
     AdMob.prepareInterstitial({ adId: unit, isTesting: testing, immersiveMode: true })
-      .then(function () { loaded = true; loading = false; }, function () { loading = false; setTimeout(load, 60000); });
+      .then(function () { loaded = true; loading = false; }, function () { loading = false; });   // retried after the next board
   }
 
   function init() {
@@ -49,20 +52,19 @@
       ready = true;
       AdMob.addListener('interstitialAdDismissed', function () { finish(); });
       AdMob.addListener('interstitialAdFailedToShow', function () { finish(); });
-      load();
+      if (boardsSinceAd > 0) load();
     }).catch(function () { /* ads are optional; the game never depends on them */ });
   }
 
   function finish() {
     loaded = false;
     var fn = onDismiss; onDismiss = null;
-    if (fn) fn();
-    load();
+    if (fn) fn();   // the next ad loads after the next finished board
   }
 
   global.GameAds = {
     /** Count a finished board (win, loss or duel). */
-    boardFinished: function () { boardsSinceAd++; },
+    boardFinished: function () { boardsSinceAd++; load(); },
     /** Run next(), showing an interstitial first if one is due. */
     between: function (level, next) {
       var due = ready && loaded && boardsSinceAd >= CONFIG.boardsBetweenAds && Date.now() - lastAdAt > CONFIG.minGapMs && (level || 99) >= CONFIG.firstLevelWithAds;
