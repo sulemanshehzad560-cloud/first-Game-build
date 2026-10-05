@@ -27,6 +27,23 @@ await sleep(15000);
 // The software-rendered emulator sometimes stalls a system app (Pixel Launcher) long enough for an
 // "isn't responding" popup, which then swallows key presses meant for the game. Keep those hidden.
 adb('shell settings put global hide_error_dialogs 1');
+adb('shell am force-stop com.google.android.apps.nexuslauncher');   // drops a launcher stuck since boot
+await sleep(3000);
+// Key presses go to whatever window has focus. Make sure that is the game: close a system "isn't
+// responding" popup by stopping the stalled app, and bring the game back if the launcher took over.
+const focusLine = () => (adb('shell dumpsys window').split('\n').find(l => /mCurrentFocus/.test(l)) || '').trim();
+async function ensureFocus() {
+  for (let i = 0; i < 8; i++) {
+    const f = focusLine();
+    if (f.includes(PKG + '/')) return true;
+    console.log('   focus is not the game: ' + f);
+    const anr = f.match(/Not Responding: ([\w.]+)/);
+    if (anr) adb('shell am force-stop ' + anr[1]);
+    else adb(`shell monkey -p ${PKG} -c android.intent.category.LAUNCHER 1`);
+    await sleep(2000);
+  }
+  return false;
+}
 console.log('… installing', APK);
 await device.installApk(APK);
 const bridgeStarts = () => (adb('logcat -d -s Capacitor:D').match(/Starting BridgeActivity/g) || []).length;
@@ -204,17 +221,11 @@ await step('tile sets and back button', async () => {
   await sleep(900); await shot('08-tile-sets');
   log(await page.evaluate(() => !document.getElementById('modal').hidden), 'Tile sets dialog open');
   const waitClosed = () => page.waitForFunction(() => document.getElementById('modal').hidden, null, { timeout: 5000 }).then(() => true, () => false);
+  if (!(await ensureFocus())) console.log('   could not give the game focus: ' + focusLine());
   await device.shell('input keyevent 4');
   // the emulator renders in software, so give the dialog up to five seconds to go
-  let closed = await waitClosed();
-  if (!closed) {
-    // if something else had focus (a system popup), say what, bring the game forward and press again
-    const focus = adb('shell dumpsys window').split('\n').find(l => /mCurrentFocus/.test(l)) || '';
-    console.log('   back press did not close the dialog; focus: ' + focus.trim());
-    if (!focus.includes(PKG)) { await device.shell(`am start -n ${PKG}/.MainActivity`); await sleep(1500); }
-    await device.shell('input keyevent 4');
-    closed = await waitClosed();
-  }
+  const closed = await waitClosed();
+  if (!closed) console.log('   back press did not close the dialog; focus: ' + focusLine());
   log(closed, 'Back button closes dialogs');
 });
 
