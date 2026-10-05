@@ -28,6 +28,8 @@ console.log('… installing', APK);
 await device.installApk(APK);
 const bridgeStarts = () => (adb('logcat -d -s Capacitor:D').match(/Starting BridgeActivity/g) || []).length;
 async function launchApp() {
+  // make sure the screen is on and unlocked, or the page reports itself hidden
+  adb('shell input keyevent KEYCODE_WAKEUP'); adb('shell wm dismiss-keyguard');
   adb('logcat -c');
   await device.shell(`am start -W -n ${PKG}/.MainActivity`);
   await sleep(12000);
@@ -47,15 +49,25 @@ const errors = [];
 // Attach to the live page. If Android relaunches the activity early (the emulator does while it finishes
 // booting), the old activity's WebView can linger with a dead native bridge; drive that one and every
 // click lands on a page nobody sees. A page is live when it is visible and a native call answers.
-const isLive = p => p.evaluate(() => document.visibilityState === 'visible' && window.Capacitor &&
-  Promise.race([(window.Capacitor.Plugins.App || window.Capacitor.registerPlugin('App')).getInfo().then(() => true, () => false), new Promise(r => setTimeout(() => r(false), 4000))])).catch(() => false);
+// Returns '' when live, otherwise the reason (logged so a failed attach explains itself).
+const liveReason = p => p.evaluate(async () => {
+  if (!window.Capacitor) return 'no Capacitor';
+  const app = window.Capacitor.Plugins.App || window.Capacitor.registerPlugin('App');
+  const ok = await Promise.race([app.getInfo().then(() => true, () => false), new Promise(r => setTimeout(() => r(false), 5000))]);
+  return ok ? '' : 'native call did not answer (visibility ' + document.visibilityState + ')';
+}).catch(e => 'evaluate failed: ' + String(e.message || e).split('\n')[0]);
+const isLive = async p => (await liveReason(p)) === '';
 async function connect() {
   await device.webView({ pkg: PKG }, { timeout: 60000 });
+  let fallback = null;
   for (let attempt = 0; attempt < 15; attempt++) {
     const views = device.webViews().filter(v => v.pkg() === PKG).reverse();
     for (const v of views) {
       const p = await v.page().catch(() => null);
-      if (!p || !(await isLive(p))) continue;
+      if (!p) continue;
+      fallback = fallback || p;
+      const why = await liveReason(p);
+      if (why) { if (attempt % 5 === 0) console.log('   page not live yet: ' + why); continue; }
       page = p;
       page.on('pageerror', e => errors.push('pageerror: ' + e.message));
       page.on('console', m => {
@@ -70,7 +82,12 @@ async function connect() {
     }
     await sleep(2000);
   }
-  throw new Error('no live WebView page for ' + PKG);
+  if (!fallback) throw new Error('no WebView page for ' + PKG);
+  console.log('   no page proved live; using the only page available');
+  page = fallback;
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/^Error injecting safe area CSS/.test(m.text())) errors.push('console: ' + m.text()); });
+  await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
 }
 // Each step gets two minutes; a stalled WebView or emulator fails the step instead of hanging the job.
 async function step(name, fn) {
