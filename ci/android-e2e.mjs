@@ -24,6 +24,9 @@ await device.shell(`pm uninstall ${PKG}`).catch(() => {});
 // system settle first, and if the activity still started twice, restart the app once cleanly.
 for (let i = 0; i < 30 && adb('shell getprop sys.user.0.ce_available').trim() !== 'true'; i++) await sleep(2000);
 await sleep(15000);
+// The software-rendered emulator sometimes stalls a system app (Pixel Launcher) long enough for an
+// "isn't responding" popup, which then swallows key presses meant for the game. Keep those hidden.
+adb('shell settings put global hide_error_dialogs 1');
 console.log('… installing', APK);
 await device.installApk(APK);
 const bridgeStarts = () => (adb('logcat -d -s Capacitor:D').match(/Starting BridgeActivity/g) || []).length;
@@ -199,9 +202,19 @@ await step('vs computer', async () => {
 await step('tile sets and back button', async () => {
   await page.evaluate(() => document.getElementById('btn-themes').click());
   await sleep(900); await shot('08-tile-sets');
+  log(await page.evaluate(() => !document.getElementById('modal').hidden), 'Tile sets dialog open');
+  const waitClosed = () => page.waitForFunction(() => document.getElementById('modal').hidden, null, { timeout: 5000 }).then(() => true, () => false);
   await device.shell('input keyevent 4');
   // the emulator renders in software, so give the dialog up to five seconds to go
-  const closed = await page.waitForFunction(() => document.getElementById('modal').hidden, null, { timeout: 5000 }).then(() => true, () => false);
+  let closed = await waitClosed();
+  if (!closed) {
+    // if something else had focus (a system popup), say what, bring the game forward and press again
+    const focus = adb('shell dumpsys window').split('\n').find(l => /mCurrentFocus/.test(l)) || '';
+    console.log('   back press did not close the dialog; focus: ' + focus.trim());
+    if (!focus.includes(PKG)) { await device.shell(`am start -n ${PKG}/.MainActivity`); await sleep(1500); }
+    await device.shell('input keyevent 4');
+    closed = await waitClosed();
+  }
   log(closed, 'Back button closes dialogs');
 });
 
