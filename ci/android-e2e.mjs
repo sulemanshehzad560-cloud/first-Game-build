@@ -18,12 +18,29 @@ const adb = cmd => { try { return execSync('adb ' + cmd, { maxBuffer: 64 * 1024 
 const [device] = await android.devices();
 console.log('Device:', device.model(), device.serial());
 await device.shell(`pm uninstall ${PKG}`).catch(() => {});
+// A freshly booted emulator keeps reconfiguring for a while (user unlock, overlays, input devices), and a
+// configuration change then restarts the app's activity. The old activity's WebView lingers in the same
+// process with a dead Capacitor bridge, and Playwright only reaches a process's first page. So: let the
+// system settle first, and if the activity still started twice, restart the app once cleanly.
+for (let i = 0; i < 30 && adb('shell getprop sys.user.0.ce_available').trim() !== 'true'; i++) await sleep(2000);
+await sleep(15000);
 console.log('… installing', APK);
 await device.installApk(APK);
-adb('logcat -c');
+const bridgeStarts = () => (adb('logcat -d -s Capacitor:D').match(/Starting BridgeActivity/g) || []).length;
+async function launchApp() {
+  adb('logcat -c');
+  await device.shell(`am start -W -n ${PKG}/.MainActivity`);
+  await sleep(12000);
+  return bridgeStarts();
+}
 console.log('… launching');
-await device.shell(`am start -W -n ${PKG}/.MainActivity`);
-console.log('… launched');
+let starts = await launchApp();
+if (starts > 1) {
+  console.log(`   the activity started ${starts} times while the system settled; restarting the app once`);
+  await device.shell(`am force-stop ${PKG}`); await sleep(2000);
+  starts = await launchApp();
+}
+console.log('… launched (activity starts: ' + starts + ')');
 
 let page;
 const errors = [];

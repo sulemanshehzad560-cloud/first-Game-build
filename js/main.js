@@ -1008,7 +1008,8 @@
       actions: [
         { label: 'Quit', run: function () { G.paused = false; leaveGame(); } },
         { label: 'Restart', run: restart },
-        { label: 'Settings', run: function () { G.paused = false; openSettings(pauseGame); } },
+        // stays paused while Settings is open; coming back re-opens this menu with the same turn time
+        { label: 'Settings', run: function () { openSettings(function () { resume(); pauseGame(); }); } },
         { label: 'Resume', primary: true, run: resume }
       ]
     });
@@ -1029,20 +1030,20 @@
     return row;
   }
   function openSettings(after) {
+    var done = function () { refreshHome(); if (after) after(); };
     var box = document.createElement('div'); box.className = 'settings';
     box.appendChild(toggleRow('Sound effects', store.sound, function (v) { store.sound = v; A.setEnabled(v); save(); if (v) A.select(); }));
     box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }));
     box.appendChild(toggleRow('Battery saver (fewer effects)', window.JadeLite, function (v) {
       store.lite = v; window.JadeLite = v; save(); refreshSkyHint(); board.resize(); demo.resize(); sky.resize();
     }));
-    box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(); }));
-    box.appendChild(linkRow('How to play', function () { closeModal(); howTo(after); }));
+    box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(done); }));
+    box.appendChild(linkRow('How to play', function () { closeModal(); howTo(done); }));
     box.appendChild(linkRow('Privacy policy', function () { window.open(PRIVACY_URL, '_blank'); }));
     if (Ads.hasPrivacyOptions()) box.appendChild(linkRow('Ad privacy choices', function () { Ads.showPrivacyOptions(); }));
     var ver = document.createElement('p'); ver.className = 'version'; ver.textContent = 'Jade Rush';
     Shell.versionName().then(function (v) { ver.textContent = 'Jade Rush ' + (v === 'web' ? '· web' : v); });
     box.appendChild(ver);
-    var done = function () { refreshHome(); if (after) after(); };
     modal({ title: 'Settings', body: box, back: function () { closeModal(); done(); }, actions: [{ label: 'Done', primary: true, run: done }] });
   }
 
@@ -1059,7 +1060,7 @@
       pb.drawTile(g, { x: x0 + k * (pb.fw + 4), y: 2 + (k === 1 ? 0 : pb.dz * 0.6), w: pb.fw, h: pb.fh }, kind, { variant: k });
     });
   }
-  function openThemes() {
+  function openThemes(after) {
     var stars = totalStars(), cur = currentTheme(), box = document.createElement('div');
     box.style.display = 'grid'; box.style.gap = '12px';
     var p = document.createElement('p'); p.textContent = 'You have ' + stars + ' ★. Clear levels with more stars to unlock new sets.';
@@ -1071,11 +1072,12 @@
       b.innerHTML = '<canvas></canvas><b></b><small></small>';
       b.querySelector('b').textContent = t.name;
       b.querySelector('small').textContent = locked ? '★ ' + t.stars + ' to unlock' : t.id === cur.id ? 'In use' : 'Tap to use';
-      b.addEventListener('click', function () { store.theme = t.id; save(); applyTheme(); A.select(); openThemes(); });
+      b.addEventListener('click', function () { store.theme = t.id; save(); applyTheme(); A.select(); openThemes(after); });
       grid.appendChild(b);
     });
     box.appendChild(p); box.appendChild(grid);
-    modal({ title: 'Tile sets', body: box, actions: [{ label: 'Done', primary: true, run: refreshHome }] });
+    var finish = function () { refreshHome(); if (after) after(); };
+    modal({ title: 'Tile sets', body: box, back: function () { closeModal(); finish(); }, actions: [{ label: 'Done', primary: true, run: finish }] });
     requestAnimationFrame(function () {
       grid.querySelectorAll('canvas').forEach(function (c, k) { drawPreview(c, THEMES[k]); });
     });
@@ -1092,7 +1094,7 @@
       'Beat the clock. Hints cost 10 seconds and shuffles are limited. Later levels stop highlighting free tiles.',
       'Duels: Race the same board, or take turns on one board (15 seconds a turn, winds and dragons score 2).'
     ].forEach(function (t) { var li = document.createElement('li'); li.textContent = t; ol.appendChild(li); });
-    modal({ title: 'How to play', body: ol, actions: [{ label: 'Got it', primary: true, run: after }] });
+    modal({ title: 'How to play', body: ol, back: function () { closeModal(); if (after) after(); }, actions: [{ label: 'Got it', primary: true, run: after }] });
   }
 
   // ------------------------------------------------------------- wiring
@@ -1186,7 +1188,10 @@
     var b = e.target.closest('[data-emote]'); if (!b) return;
     Net.send({ t: 'emote', e: b.dataset.emote }); showEmote(b.dataset.emote, true);
   });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('modal').hidden && G.mode !== 'online') closeModal(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || $('modal').hidden) return;
+    if (modal.back) modal.back(); else closeModal();
+  });
   document.addEventListener('visibilitychange', function () { if (document.hidden) pauseGame(); });
   Shell.onPause(pauseGame);
   Shell.onBack(function () {
