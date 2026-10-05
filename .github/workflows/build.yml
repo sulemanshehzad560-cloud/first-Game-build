@@ -152,8 +152,8 @@ jobs:
           name: emulator-results
           path: e2e-out/
 
-  # Temporary experiment: the same APK on several emulators, with and without the battery-saver CSS,
-  # to find what makes the emulator's graphics backend die when a level starts. Never blocks a release.
+  # Temporary: two extra emulator runs of the same APK to confirm the level-start crash is gone
+  # (it was intermittent, so one green run is not proof). Never blocks a release.
   emulator-probe:
     name: Emulator probe (${{ matrix.variant }} ${{ matrix.rep }})
     needs: build
@@ -162,7 +162,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [lite-css, no-lite-css]
+        variant: [as-built]
         rep: [1, 2]
     steps:
       - uses: actions/checkout@v5

@@ -41,7 +41,11 @@ async function connect() {
       if (!p || !(await isLive(p))) continue;
       page = p;
       page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-      page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+      page.on('console', m => {
+        // Capacitor's SystemBars writes the safe-area values into the page on every insets change; if that
+        // lands mid-navigation (the reload below) there is no root element yet and it logs this. Not app code.
+        if (m.type() === 'error' && !/^Error injecting safe area CSS/.test(m.text())) errors.push('console: ' + m.text());
+      });
       await page.waitForFunction(() => window.JadeRush && !document.getElementById('home').hidden, null, { timeout: 30000 });
       if (process.env.E2E_VARIANT === 'no-lite-css') await page.evaluate(() => document.documentElement.classList.remove('lite'));
       if (attempt || views.length > 1) console.log(`   attached to the live page (${views.length} WebView(s), attempt ${attempt + 1})`);

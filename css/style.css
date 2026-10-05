@@ -614,27 +614,6 @@ svg { display: block; }
 body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 input { -webkit-user-select: text; user-select: text; }
 
-/* ---------- battery saver (also on automatically for low-memory phones) ----------
-   No frosted glass and no endless decorative motion: those repaint every frame, which software-rendered
-   and budget GPUs feel most. Panels go solid instead. */
-.lite *, .lite *::before, .lite *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-.lite .cta-shine, .lite .cta-play, .lite .demo-tray, .lite .lvl.current, .lite .clock i::after { animation: none; }
-.lite .round-btn, .lite .icon-btn, .lite .star-pill, .lite .stats, .lite .player, .lite .goal, .lite .lvl:disabled, .lite .emotes button { background: rgba(14, 12, 24, .9); }
-.lite .duel-card, .lite .panel { background: #120e1a; }
-.lite .modal { background: rgba(3, 4, 10, .86); }
-.lite .level-scroll { mask-image: none; -webkit-mask-image: none; }
-/* big blurred shadows and blur filters are the most expensive things to rasterise without a strong GPU */
-.lite .tray { box-shadow: inset 0 0 0 2px rgba(246,213,138,.55), 0 0 0 6px #3b2412, 0 0 0 7px rgba(246,213,138,.35); transition: none; }
-.lite .tray::after, .lite .board-wrap::before, .lite .cta::before { display: none; }
-.lite .cta { box-shadow: inset 0 0 0 2px rgba(246,213,138,.85), inset 0 0 0 5px rgba(110,10,20,.9), 0 6px 0 #4a0710; }
-.lite .duel-card, .lite .sheet { box-shadow: none; }
-.lite .qface { box-shadow: 0 6px 0 var(--wood), 0 7px 0 var(--wood-2), inset 0 0 0 1px rgba(255,255,255,.6); }
-.lite .lvl { box-shadow: 0 5px 0 var(--wood), inset 0 0 0 3px rgba(217,164,65,.7); }
-.lite .lvl.current { box-shadow: 0 5px 0 #4a0710, inset 0 0 0 3px var(--gold); }
-.lite .logo-rush, .lite .demo-tray::before { filter: none; }
-.lite .banner { filter: none; text-shadow: none; }
-.lite .sky-hint { display: none; }
-
 /* ---------- older WebViews ---------- */
 @supports not (backdrop-filter: blur(4px)) and not (-webkit-backdrop-filter: blur(4px)) {
   .modal { background: rgba(3, 4, 10, .9); }
