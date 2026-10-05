@@ -12,12 +12,15 @@
 </head>
 <body>
 <canvas id="bg" aria-hidden="true"></canvas>
-<div id="loader" aria-hidden="true"><div class="loader-tile">中</div><p>Jade <span>Rush</span></p></div>
+<div id="loader" aria-hidden="true"><div class="loader-glow"></div><div class="loader-tiles"><span>東</span><span class="mid">中</span><span>發</span></div><p>Jade <span>Rush</span></p><div class="loader-bar"><i></i></div></div>
 <main id="app">
   <!-- HOME -->
   <section id="home" class="screen">
     <header class="home-top">
-      <span class="star-pill" id="home-stars" aria-label="Stars collected">★ 0</span>
+      <div class="home-pills">
+        <span class="star-pill" id="home-stars" aria-label="Stars collected">★ 0</span>
+        <span class="star-pill streak-pill" id="home-streak" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 21c-3.6 0-6-2.4-6-5.7 0-3.4 3-5.1 3.6-8.8 2.5 1.2 3.4 3.4 3.4 5 .9-.6 1.6-1.6 1.8-3 1.9 1.4 3.2 3.9 3.2 6.8 0 3.3-2.4 5.7-6 5.7z"/></svg><span></span></span>
+      </div>
       <div class="home-top-actions">
         <button id="btn-howto" class="round-btn" aria-label="How to play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 9a3 3 0 1 1 4.3 2.7c-.9.4-1.5 1.2-1.5 2.2v.6M12 18h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
         <button id="btn-settings" class="round-btn" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
@@ -105,34 +108,35 @@
         <span><b>Play with Facebook friends</b><small>See who's online and send an invite</small></span>
         <i aria-hidden="true">›</i>
       </button>
-      <div class="panel">
-        <h3>Host a room</h3>
+      <div class="panel host-panel">
+        <div class="panel-head"><span class="panel-ico" aria-hidden="true">中</span><div><h3>Host a room</h3><p class="muted small">Pick how you'll play, then share the code.</p></div></div>
         <div class="opt-group">
           <span>Mode</span>
-          <div class="size-pick" id="pick-duel" role="radiogroup" aria-label="Duel mode">
-            <button class="chip" data-v="race" role="radio">Race</button>
-            <button class="chip" data-v="turns" role="radio">Take turns</button>
+          <div class="mode-pick size-pick" id="pick-duel" role="radiogroup" aria-label="Duel mode">
+            <button class="chip mode-card" data-v="race" role="radio"><b>Race</b><small>Same board, first to clear wins</small></button>
+            <button class="chip mode-card" data-v="turns" role="radio"><b>Take turns</b><small>One board, one match each</small></button>
           </div>
           <p class="muted small" id="duel-desc"></p>
         </div>
         <div class="opt-group">
           <span>Board</span>
-          <div class="size-pick" id="pick-size" role="radiogroup" aria-label="Board size">
+          <div class="size-pick seg" id="pick-size" role="radiogroup" aria-label="Board size">
             <button class="chip" data-v="small" role="radio">Compact</button>
             <button class="chip" data-v="big" role="radio">Grand</button>
           </div>
         </div>
         <button id="btn-host" class="primary">Create room</button>
         <div id="host-box" class="code-box" hidden>
-          <span class="code" id="room-code">-----</span>
+          <span class="code-label">Room code</span>
+          <span class="code" id="room-code" aria-live="polite">-----</span>
           <div class="code-actions">
             <button id="btn-copy-code" class="ghost">Copy code</button>
-            <button id="btn-copy-link" class="ghost">Copy invite link</button>
+            <button id="btn-copy-link" class="ghost">Share invite</button>
           </div>
         </div>
       </div>
-      <div class="panel">
-        <h3>Join a room</h3>
+      <div class="panel join-panel">
+        <div class="panel-head"><span class="panel-ico alt" aria-hidden="true">北</span><div><h3>Join a room</h3><p class="muted small">Type the 5-character code from your friend.</p></div></div>
         <form id="join-form" class="join">
           <label class="sr-only" for="join-code">Room code</label>
           <input id="join-code" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE">
@@ -194,8 +198,9 @@
 </main>
 
 <div id="modal" class="modal" hidden>
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="sheet" id="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div id="modal-stars" class="stars-big" hidden></div>
+    <p id="modal-eyebrow" class="sheet-eyebrow" hidden></p>
     <h2 id="modal-title"></h2>
     <div id="modal-body" class="modal-body"></div>
     <div id="modal-actions" class="modal-actions"></div>

@@ -29,6 +29,34 @@
   // Drawn rather than a text glyph: Android's system font has no '❚'.
   var PAUSE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></svg>';
   var fmt = function (n) { return n.toLocaleString('en-US'); };
+  // Line icons (24px grid, stroke = currentColor) for buttons, settings rows and stat cards.
+  var ICON_PATHS = {
+    play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
+    restart: '<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/>',
+    gear: '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4z"/>',
+    home: '<path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/>',
+    sound: '<path d="M5 9.5h3l4-3.5v12l-4-3.5H5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+    vibrate: '<rect x="8" y="4" width="8" height="16" rx="2"/><path d="M4.5 9v6M19.5 9v6"/>',
+    leaf: '<path d="M5 19c0-8 5-13 14-13 0 9-5 14-13 14"/><path d="M5 19c3-4 6-6.5 9.5-8.5"/>',
+    palette: '<path d="M12 4a8 8 0 1 0 0 16c1.2 0 1.6-.9 1.2-1.8-.5-1 .1-2.2 1.3-2.2H17a3 3 0 0 0 3-3c0-4.9-3.6-9-8-9z"/><circle cx="8" cy="11" r="1.1"/><circle cx="11" cy="7.8" r="1.1"/><circle cx="15" cy="8.6" r="1.1"/>',
+    help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1.1.9-1.1 1.6v.4M12 16.8h.01"/>',
+    shield: '<path d="M12 3.5 19 6v5.5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+    ad: '<rect x="3.5" y="6" width="17" height="12" rx="2.5"/><path d="M8 15l2-6 2 6M8.7 13h2.6M15 9v6h1.2a2 2 0 0 0 0-6z"/>',
+    score: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5v9M9.5 10a2.5 2 0 0 1 5 0c0 2.6-5 1.4-5 4a2.5 2 0 0 0 5 0"/>',
+    clock: '<circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M10 3.5h4"/>',
+    combo: '<path d="M13 3 5.5 13.5H12L11 21l7.5-10.5H12z"/>',
+    bonus: '<path d="M12 4v16M4 12h16"/><circle cx="12" cy="12" r="8.5"/>',
+    tiles: '<rect x="4" y="5" width="7" height="9" rx="1.5"/><rect x="13" y="5" width="7" height="9" rx="1.5"/><path d="M6 17h12"/>',
+    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4"/>',
+    copy: '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 15V6a1 1 0 0 1 1-1h9"/>',
+    share: '<circle cx="17.5" cy="6" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/><path d="m8.7 10.8 6.6-3.6M8.7 13.2l6.6 3.6"/>',
+    user: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
+    flame: '<path d="M12 21c-3.6 0-6-2.4-6-5.7 0-3.4 3-5.1 3.6-8.8 2.5 1.2 3.4 3.4 3.4 5 .9-.6 1.6-1.6 1.8-3 1.9 1.4 3.2 3.9 3.2 6.8 0 3.3-2.4 5.7-6 5.7z"/>',
+    lock: '<rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>'
+  };
+  function icon(name, size) {
+    return '<svg class="ico" viewBox="0 0 24 24" width="' + (size || 20) + '" height="' + (size || 20) + '" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON_PATHS[name] || '') + '</svg>';
+  }
   function currentTheme() {
     var t = THEMES.filter(function (x) { return x.id === store.theme; })[0];
     return t && totalStars() >= t.stars ? t : THEMES[0];
@@ -276,6 +304,8 @@
   }
   function modal(opts) {
     $('modal-title').textContent = opts.title;
+    $('modal-sheet').className = 'sheet' + (opts.kind ? ' sheet-' + opts.kind : '');
+    var eb = $('modal-eyebrow'); eb.hidden = !opts.eyebrow; eb.textContent = opts.eyebrow || '';
     var body = $('modal-body'); body.innerHTML = '';
     if (typeof opts.body === 'string') { var p = document.createElement('p'); p.textContent = opts.body; body.appendChild(p); }
     else if (opts.body) body.appendChild(opts.body);
@@ -285,7 +315,9 @@
     modal.back = opts.back || null;
     (opts.actions || []).forEach(function (a) {
       var b = document.createElement('button');
-      b.className = a.primary ? 'primary' : 'ghost'; b.textContent = a.label;
+      b.className = (a.primary ? 'primary' : 'ghost') + (a.cls ? ' ' + a.cls : '');
+      if (a.icon) b.innerHTML = icon(a.icon, a.primary ? 22 : 20) + '<span></span>';
+      (a.icon ? b.lastChild : b).textContent = a.label;
       var run = a.run;
       if (opts.adGate != null && run) run = function () { Ads.between(opts.adGate, a.run); };
       b.addEventListener('click', function () { closeModal(); if (run) run(); });
@@ -300,8 +332,8 @@
   function resultGrid(pairs) {
     var d = document.createElement('div'); d.className = 'result-grid';
     pairs.forEach(function (p) {
-      var c = document.createElement('div'); c.innerHTML = '<span class="label"></span><b></b>';
-      c.firstChild.textContent = p[0]; c.lastChild.textContent = p[1];
+      var c = document.createElement('div'); c.innerHTML = (p[2] ? icon(p[2], 18) : '') + '<span class="label"></span><b></b>';
+      c.querySelector('.label').textContent = p[0]; c.lastChild.textContent = p[1];
       var m = /^([+]?)(\d+)$/.exec(String(p[1]));
       if (m && !reduced) { c.lastChild.dataset.to = m[2]; c.lastChild.dataset.pre = m[1]; c.lastChild.textContent = m[1] + '0'; }
       d.appendChild(c);
@@ -348,6 +380,8 @@
     $('continue-meta').textContent = fmt(cleared) + ' cleared · ' + fmt(totalStars()) + ' ★ collected';
     $('levels-meta').textContent = fmt(cleared) + ' / ' + fmt(MAX);
     $('home-stars').textContent = '★ ' + fmt(totalStars());
+    var streak = store.streak.n > 1 && (store.streak.last === dayKey() || store.streak.last === dayKey(-1)) ? store.streak.n : 0;
+    $('home-streak').hidden = !streak; $('home-streak').lastChild.textContent = streak + '-day streak';
     $('journey-fill').style.width = (cleared / MAX * 100).toFixed(2) + '%';
     $('daily-meta').textContent = d ? 'Done today · ' + '★★★'.slice(0, d)
       : store.streak.n > 1 && store.streak.last === dayKey(-1) ? store.streak.n + '-day streak' : 'New every day';
@@ -363,7 +397,7 @@
       var end = Math.min(last, b + 99), rows = '', all = '', done = '', reach = store.done ? end : Math.min(end, store.level);
       for (var L = b; L <= end; L++) {
         var x = trailX(L), y = (L - b) * ROW + 44, s = store.stars[L] || 0, locked = L > store.level;
-        rows += '<div class="lvl-row"><button class="lvl' + (L === store.level && !store.done ? ' current' : '') + '" style="--x:' + x.toFixed(1) + '%" data-level="' + L + '"' +
+        rows += '<div class="lvl-row"><button class="lvl' + (L === store.level && !store.done ? ' current' : '') + (L % 100 === 0 ? ' milestone' : '') + '" style="--x:' + x.toFixed(1) + '%" data-level="' + L + '"' +
           (locked ? ' disabled aria-label="Level ' + L + ', locked"' : '') + '>' + L + (locked ? '' : '<small>' + ('★★★'.slice(0, s) || '') + '</small>') + '</button></div>';
         var seg = L === b ? 'M' + x.toFixed(1) + ' ' + y : ' C' + trailX(L - 1).toFixed(1) + ' ' + (y - ROW / 2) + ' ' + x.toFixed(1) + ' ' + (y - ROW / 2) + ' ' + x.toFixed(1) + ' ' + y;
         all += seg; if (L <= reach) done += seg;
@@ -492,12 +526,12 @@
     var frac = G.timeLeft / G.limit;
     var stars = frac >= 0.4 && !G.usedHint ? 3 : frac >= 0.2 ? 2 : 1;
     A.win();
-    var grid = resultGrid([['Score', G.score], ['Time left', fmtTime(G.timeLeft)], ['Best combo', '×' + G.bestCombo], ['Time bonus', '+' + bonus]]);
+    var grid = resultGrid([['Score', G.score, 'score'], ['Time left', fmtTime(G.timeLeft), 'clock'], ['Best combo', '×' + G.bestCombo, 'combo'], ['Time bonus', '+' + bonus, 'bonus']]);
     confetti.burst(stars === 3 ? 220 : 120); setHeat(0); buzz([20, 40, 20, 40, 60]);
     if (G.duel === 'race') {
       Net.send({ t: 'done', score: G.score });
       store.wins.online++; save();
-      modal({ title: 'You won the race!', body: grid, back: leaveGame, actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }] });
+      modal({ kind: 'result', eyebrow: 'Online race', title: 'You won the race!', body: grid, back: leaveGame, actions: [{ label: 'Menu', icon: 'home', run: leaveGame }, { label: 'Rematch', icon: 'restart', primary: true, run: rematch }] });
       return;
     }
     var title = stars === 3 ? 'Flawless' : 'Board cleared';
@@ -507,7 +541,7 @@
       if (!prev) store.streak = { last: d, n: store.streak.last === dayKey(-1) ? store.streak.n + 1 : 1 };
       save();
       Ads.boardFinished();
-      modal({ title: title, stars: stars, body: grid, adGate: 99, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Play journey', primary: true, run: function () { startLevel(store.level); } }] });
+      modal({ kind: 'result', eyebrow: 'Daily board · ' + dayKey(), title: title, stars: stars, body: grid, adGate: 99, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'Play journey', icon: 'play', primary: true, run: function () { startLevel(store.level); } }] });
       return;
     }
     var L = G.level, newBest = G.score > (store.best[L] || 0);
@@ -524,12 +558,12 @@
       msg.className = 'finale';
       msg.textContent = 'You cleared all ' + fmt(MAX) + ' levels of Jade Rush with ' + fmt(totalStars()) + ' ★. Replay any level from the map to chase three stars.';
       wrap.appendChild(msg); wrap.appendChild(grid);
-      modal({ title: 'Journey complete!', stars: stars, body: wrap, back: function () { closeModal(); show('home'); },
-        actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Level map', primary: true, run: function () { renderLevelGrid(); show('levels'); } }] });
+      modal({ kind: 'result', eyebrow: 'Level ' + fmt(MAX), title: 'Journey complete!', stars: stars, body: wrap, back: function () { closeModal(); show('home'); },
+        actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'Level map', icon: 'trophy', primary: true, run: function () { renderLevelGrid(); show('levels'); } }] });
       return;
     }
-    var next = L < MAX ? { label: 'Next level', primary: true, run: function () { startLevel(L + 1); } } : { label: 'Level map', primary: true, run: function () { renderLevelGrid(); show('levels'); } };
-    modal({ title: title, stars: stars, body: grid, adGate: L, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Replay', run: function () { startLevel(L); } }, next] });
+    var next = L < MAX ? { label: 'Next level', icon: 'play', primary: true, run: function () { startLevel(L + 1); } } : { label: 'Level map', icon: 'trophy', primary: true, run: function () { renderLevelGrid(); show('levels'); } };
+    modal({ kind: 'result', eyebrow: 'Level ' + fmt(L), title: title, stars: stars, body: grid, adGate: L, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Replay', icon: 'restart', run: function () { startLevel(L); } }, next] });
   }
 
   function timedFail(reason) {
@@ -538,15 +572,19 @@
     if (G.duel === 'race') {
       Net.send({ t: 'out', left: G.left, score: G.score });
       if (G.rival.out) resolveRace();
-      else modal({ title: reason, body: 'You have ' + G.left + ' tiles left. Waiting to see how your rival does…', actions: [{ label: 'Leave', run: leaveGame }] });
+      else modal({ kind: 'fail', eyebrow: 'Online race', title: reason, body: 'You have ' + G.left + ' tiles left. Waiting to see how your rival does…', actions: [{ label: 'Leave', icon: 'home', run: leaveGame }] });
       return;
     }
     var cleared = G.lay.n - G.left;
     Ads.boardFinished();
+    var meter = document.createElement('div'); meter.className = 'fail-meter';
+    meter.innerHTML = '<p></p><div class="fail-bar"><i></i></div>';
+    meter.firstChild.textContent = 'You cleared ' + cleared + ' of ' + G.lay.n + ' tiles.';
+    meter.querySelector('i').style.width = Math.round(100 * cleared / G.lay.n) + '%';
     modal({
-      title: reason, adGate: G.level || 99, back: function () { closeModal(); show('home'); },
-      body: 'You cleared ' + cleared + ' of ' + G.lay.n + ' tiles.',
-      actions: [{ label: 'Menu', run: function () { show('home'); } }, { label: 'Retry', primary: true, run: function () { G.mode === 'daily' ? startDaily() : startLevel(G.level); } }]
+      kind: 'fail', eyebrow: G.mode === 'daily' ? 'Daily board' : 'Level ' + fmt(G.level), title: reason, adGate: G.level || 99, back: function () { closeModal(); show('home'); },
+      body: meter,
+      actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'Retry', icon: 'restart', primary: true, run: function () { G.mode === 'daily' ? startDaily() : startLevel(G.level); } }]
     });
   }
 
@@ -555,9 +593,10 @@
     var win = me < them || (me === them && G.score > G.rival.score), draw = me === them && G.score === G.rival.score;
     if (win) { store.wins.online++; save(); A.win(); }
     modal({
+      kind: win ? 'result' : 'fail', eyebrow: 'Online race',
       title: draw ? 'Dead heat' : win ? 'You win on tiles' : 'Rival wins on tiles',
-      body: resultGrid([['Your tiles left', me], ['Rival tiles left', them], ['Your score', G.score], ['Rival score', G.rival.score]]),
-      actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }]
+      body: resultGrid([['Your tiles left', me, 'tiles'], ['Rival tiles left', them, 'tiles'], ['Your score', G.score, 'score'], ['Rival score', G.rival.score, 'score']]),
+      actions: [{ label: 'Menu', icon: 'home', run: leaveGame }, { label: 'Rematch', icon: 'restart', primary: true, run: rematch }]
     });
   }
 
@@ -673,9 +712,10 @@
     save();
     if (G.mode !== 'online') Ads.boardFinished();
     modal({
+      kind: winner === G.me || G.mode === 'local' ? 'result' : 'fail', eyebrow: G.mode === 'ai' ? 'Vs computer' : G.mode === 'local' ? 'Pass & play' : 'Online duel',
       title: title, adGate: G.mode === 'online' ? null : 99, back: leaveGame,
-      body: resultGrid([[G.names[0], s[0] + ' pts'], [G.names[1], s[1] + ' pts']]),
-      actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }]
+      body: resultGrid([[G.names[0], s[0] + ' pts', 'user'], [G.names[1], s[1] + ' pts', 'user']]),
+      actions: [{ label: 'Menu', icon: 'home', run: leaveGame }, { label: 'Rematch', icon: 'restart', primary: true, run: rematch }]
     });
   }
 
@@ -766,7 +806,12 @@
   }
 
   Net.onStatus = function (state, info) {
-    if (state === 'hosting') { $('room-code').textContent = info; $('host-box').hidden = false; setLobbyStatus('Waiting for a friend to join…'); }
+    if (state === 'hosting') {
+      // the code as five ivory tiles
+      $('room-code').innerHTML = String(info).split('').map(function (ch) { return '<span class="code-tile">' + ch + '</span>'; }).join('');
+      $('room-code').setAttribute('aria-label', 'Room code ' + info);
+      $('host-box').hidden = false; setLobbyStatus('Waiting for a friend to join…');
+    }
     else if (state === 'connecting') setLobbyStatus('Connecting to room ' + info + '…');
     else if (state === 'connected') { setLobbyStatus('Connected!'); if (Net.isHost) { G = { mode: null }; hostStart(); } }
     else if (state === 'closed') {
@@ -793,7 +838,7 @@
       G.rival.done = true; G.rival.left = 0; updateTimedHud();
       if (!G.won) {
         G.over = true; A.lose();
-        modal({ title: 'Rival cleared it first', body: 'You had ' + G.left + ' tiles left.', actions: [{ label: 'Menu', run: leaveGame }, { label: 'Rematch', primary: true, run: rematch }] });
+        modal({ kind: 'fail', eyebrow: 'Online race', title: 'Rival cleared it first', body: 'You had ' + G.left + ' tiles left.', actions: [{ label: 'Menu', icon: 'home', run: leaveGame }, { label: 'Rematch', icon: 'restart', primary: true, run: rematch }] });
       }
     } else if (m.t === 'out' && G.duel === 'race') {
       G.rival.out = true; G.rival.left = m.left | 0; G.rival.score = m.score | 0; updateTimedHud();
@@ -1001,50 +1046,53 @@
       else startTurns({ mode: G.mode, size: G.size, aiLevel: G.aiLevel, me: G.me, first: G.first, seed: Math.floor(Math.random() * 1e9) });
     };
     var info = document.createElement('div'); info.className = 'pause-info';
-    if (!isTurns()) info.appendChild(resultGrid([['Time left', fmtTime(G.timeLeft)], ['Tiles left', G.left]]));
-    else info.appendChild(resultGrid([[G.names[0], G.scores[0] + ' pts'], [G.names[1], G.scores[1] + ' pts']]));
+    if (!isTurns()) info.appendChild(resultGrid([['Time left', fmtTime(G.timeLeft), 'clock'], ['Tiles left', G.left, 'tiles']]));
+    else info.appendChild(resultGrid([[G.names[0], G.scores[0] + ' pts', 'user'], [G.names[1], G.scores[1] + ' pts', 'user']]));
     modal({
-      title: 'Paused', body: info, back: function () { closeModal(); resume(); },
+      kind: 'pause', eyebrow: $('game-title').lastChild.textContent, title: 'Paused', body: info, back: function () { closeModal(); resume(); },
       actions: [
-        { label: 'Quit', run: function () { G.paused = false; leaveGame(); } },
-        { label: 'Restart', run: restart },
+        { label: 'Resume', icon: 'play', primary: true, cls: 'resume-btn', run: resume },
+        { label: 'Quit', icon: 'home', cls: 'pause-opt', run: function () { G.paused = false; leaveGame(); } },
+        { label: 'Restart', icon: 'restart', cls: 'pause-opt', run: restart },
         // stays paused while Settings is open; coming back re-opens this menu with the same turn time
-        { label: 'Settings', run: function () { openSettings(function () { resume(); pauseGame(); }); } },
-        { label: 'Resume', primary: true, run: resume }
+        { label: 'Settings', icon: 'gear', cls: 'pause-opt', run: function () { openSettings(function () { resume(); pauseGame(); }); } }
       ]
     });
   }
 
-  function toggleRow(label, on, onChange) {
+  function toggleRow(label, on, onChange, ico) {
     var row = document.createElement('button'); row.type = 'button'; row.className = 'setting-row';
     row.setAttribute('role', 'switch'); row.setAttribute('aria-checked', String(on));
-    row.innerHTML = '<span></span><i class="switch" aria-hidden="true"></i>';
-    row.firstChild.textContent = label;
+    row.innerHTML = '<em class="row-ico">' + icon(ico || 'gear') + '</em><span></span><i class="switch" aria-hidden="true"></i>';
+    row.querySelector('span').textContent = label;
     row.addEventListener('click', function () { on = !on; row.setAttribute('aria-checked', String(on)); onChange(on); });
     return row;
   }
-  function linkRow(label, fn) {
+  function linkRow(label, fn, ico) {
     var row = document.createElement('button'); row.type = 'button'; row.className = 'setting-row link-row';
-    row.innerHTML = '<span></span><i aria-hidden="true">›</i>'; row.firstChild.textContent = label;
+    row.innerHTML = '<em class="row-ico">' + icon(ico || 'help') + '</em><span></span><i aria-hidden="true">›</i>'; row.querySelector('span').textContent = label;
     row.addEventListener('click', fn);
     return row;
   }
   function openSettings(after) {
     var done = function () { refreshHome(); if (after) after(); };
     var box = document.createElement('div'); box.className = 'settings';
-    box.appendChild(toggleRow('Sound effects', store.sound, function (v) { store.sound = v; A.setEnabled(v); save(); if (v) A.select(); }));
-    box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }));
+    var group = function (name) { var h = document.createElement('p'); h.className = 'settings-group'; h.textContent = name; box.appendChild(h); };
+    group('Game feel');
+    box.appendChild(toggleRow('Sound effects', store.sound, function (v) { store.sound = v; A.setEnabled(v); save(); if (v) A.select(); }, 'sound'));
+    box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }, 'vibrate'));
     box.appendChild(toggleRow('Battery saver (fewer effects)', window.JadeLite, function (v) {
       store.lite = v; window.JadeLite = v; save(); refreshSkyHint(); board.resize(); demo.resize(); sky.resize();
-    }));
-    box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(done); }));
-    box.appendChild(linkRow('How to play', function () { closeModal(); howTo(done); }));
-    box.appendChild(linkRow('Privacy policy', function () { window.open(PRIVACY_URL, '_blank'); }));
-    if (Ads.hasPrivacyOptions()) box.appendChild(linkRow('Ad privacy choices', function () { Ads.showPrivacyOptions(); }));
+    }, 'leaf'));
+    group('More');
+    box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(done); }, 'palette'));
+    box.appendChild(linkRow('How to play', function () { closeModal(); howTo(done); }, 'help'));
+    box.appendChild(linkRow('Privacy policy', function () { window.open(PRIVACY_URL, '_blank'); }, 'shield'));
+    if (Ads.hasPrivacyOptions()) box.appendChild(linkRow('Ad privacy choices', function () { Ads.showPrivacyOptions(); }, 'ad'));
     var ver = document.createElement('p'); ver.className = 'version'; ver.textContent = 'Jade Rush';
     Shell.versionName().then(function (v) { ver.textContent = 'Jade Rush ' + (v === 'web' ? '· web' : v); });
     box.appendChild(ver);
-    modal({ title: 'Settings', body: box, back: function () { closeModal(); done(); }, actions: [{ label: 'Done', primary: true, run: done }] });
+    modal({ kind: 'settings', title: 'Settings', body: box, back: function () { closeModal(); done(); }, actions: [{ label: 'Done', primary: true, run: done }] });
   }
 
   // ------------------------------------------------------------- tile sets
@@ -1063,38 +1111,65 @@
   function openThemes(after) {
     var stars = totalStars(), cur = currentTheme(), box = document.createElement('div');
     box.style.display = 'grid'; box.style.gap = '12px';
-    var p = document.createElement('p'); p.textContent = 'You have ' + stars + ' ★. Clear levels with more stars to unlock new sets.';
+    var p = document.createElement('p'); p.className = 'themes-intro'; p.textContent = 'Six woods, each with its own table and night sky. Earn stars to unlock them.';
     var grid = document.createElement('div'); grid.className = 'themes';
     THEMES.forEach(function (t) {
       var locked = stars < t.stars, b = document.createElement('button');
       b.className = 'theme-card'; b.type = 'button'; b.disabled = locked;
       b.setAttribute('aria-pressed', String(t.id === cur.id));
-      b.innerHTML = '<canvas></canvas><b></b><small></small>';
+      b.innerHTML = '<canvas></canvas><b></b><small></small>' + (locked ? '<span class="unlock"><i></i></span>' : '');
+      b.style.setProperty('--wood', t.face[0]); b.style.setProperty('--wood2', t.body[1]);
       b.querySelector('b').textContent = t.name;
-      b.querySelector('small').textContent = locked ? '★ ' + t.stars + ' to unlock' : t.id === cur.id ? 'In use' : 'Tap to use';
+      b.querySelector('small').innerHTML = locked ? icon('lock', 13) + ' ' + fmt(stars) + ' / ' + t.stars + ' ★' : t.id === cur.id ? '✓ In use' : 'Tap to use';
+      if (locked) b.querySelector('.unlock i').style.width = Math.round(100 * stars / t.stars) + '%';
       b.addEventListener('click', function () { store.theme = t.id; save(); applyTheme(); A.select(); openThemes(after); });
       grid.appendChild(b);
     });
     box.appendChild(p); box.appendChild(grid);
     var finish = function () { refreshHome(); if (after) after(); };
-    modal({ title: 'Tile sets', body: box, back: function () { closeModal(); finish(); }, actions: [{ label: 'Done', primary: true, run: finish }] });
+    modal({ kind: 'themes', eyebrow: '★ ' + fmt(stars) + ' collected', title: 'Tile sets', body: box, back: function () { closeModal(); finish(); }, actions: [{ label: 'Done', primary: true, run: finish }] });
     requestAnimationFrame(function () {
       grid.querySelectorAll('canvas').forEach(function (c, k) { drawPreview(c, THEMES[k]); });
     });
   }
 
   // ------------------------------------------------------------- how to play
+  // An illustrated, swipeable card deck. The art is built from mini tiles in HTML, so it is crisp and cheap.
   function howTo(after) {
-    var ol = document.createElement('ol'); ol.className = 'howto';
-    [
-      'Tap two matching tiles to remove them.',
-      'Only free tiles can be used: nothing on top, and an open left or right side.',
-      'Most kinds have four copies. Pick the wrong pair and you can trap yourself, so look ahead.',
-      'Match within 5 seconds of your last match to build a combo multiplier.',
-      'Beat the clock. Hints cost 10 seconds and shuffles are limited. Later levels stop highlighting free tiles.',
-      'Duels: Race the same board, or take turns on one board (15 seconds a turn, winds and dragons score 2).'
-    ].forEach(function (t) { var li = document.createElement('li'); li.textContent = t; ol.appendChild(li); });
-    modal({ title: 'How to play', body: ol, back: function () { closeModal(); if (after) after(); }, actions: [{ label: 'Got it', primary: true, run: after }] });
+    var t = function (g, cls) { return '<span class="mt' + (cls ? ' ' + cls : '') + '">' + g + '</span>'; };
+    var cards = [
+      ['Match the pairs', 'Tap two identical tiles to clear them. Clear the whole board to win.',
+        '<div class="art art-match">' + t('東', 'red pick') + '<i class="art-plus">+</i>' + t('東', 'red pick') + '<i class="art-burst"></i></div>'],
+      ['Only free tiles', 'A tile is free when nothing sits on it and its left or right side is open. Blocked tiles look dimmed early on.',
+        '<div class="art art-free"><div class="art-row">' + t('中', 'red ok') + t('發', 'green no') + t('北', 'ok') + '</div><div class="art-top">' + t('西', 'ok') + '</div></div>'],
+      ['Chain combos', 'Make your next match within 5 seconds to grow the multiplier, up to ×12.',
+        '<div class="art art-combo"><b>×2</b><b>×5</b><b>×9</b><b class="hot">×12</b></div>'],
+      ['Beat the clock', 'Clear the board before the fuse burns out. Hints cost 10 seconds and shuffles are limited.',
+        '<div class="art art-clock"><div class="art-fuse"><i></i></div><div class="art-chips"><span>? Hint −10s</span><span>⇄ Shuffle</span></div></div>'],
+      ['Duel your friends', 'Race on the same board, or take turns on one board: 15 seconds a turn, winds and dragons score 2.',
+        '<div class="art art-duel"><span class="p p0">You</span><i>VS</i><span class="p p1">Rival</span></div>']
+    ];
+    var box = document.createElement('div'); box.className = 'howto-deck';
+    var track = document.createElement('div'); track.className = 'howto-track';
+    var dots = document.createElement('div'); dots.className = 'howto-dots';
+    cards.forEach(function (c, k) {
+      var card = document.createElement('section'); card.className = 'howto-card';
+      card.innerHTML = c[2] + '<h3></h3><p></p>';
+      card.querySelector('h3').textContent = (k + 1) + '. ' + c[0]; card.querySelector('p').textContent = c[1];
+      track.appendChild(card);
+      var d = document.createElement('button'); d.type = 'button'; d.setAttribute('aria-label', 'Card ' + (k + 1));
+      d.addEventListener('click', function () { track.scrollTo({ left: k * track.clientWidth, behavior: reduced ? 'auto' : 'smooth' }); });
+      dots.appendChild(d);
+    });
+    var mark = function () {
+      var k = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      dots.querySelectorAll('button').forEach(function (d, n) { d.classList.toggle('on', n === k); });
+    };
+    track.addEventListener('scroll', mark, { passive: true });
+    box.appendChild(track); box.appendChild(dots);
+    modal({ kind: 'howto', eyebrow: 'Swipe through', title: 'How to play', body: box, back: function () { closeModal(); if (after) after(); },
+      actions: [{ label: 'Got it', icon: 'play', primary: true, run: after }] });
+    mark();
   }
 
   // ------------------------------------------------------------- wiring
@@ -1104,8 +1179,8 @@
   $('btn-local').addEventListener('click', function () {
     var size = store.size;
     modal({
-      title: 'Pass & play', body: chipGroup('Board', [['small', 'Compact'], ['big', 'Grand']], size, function (v) { size = v; }),
-      actions: [{ label: 'Cancel' }, { label: 'Start duel', primary: true, run: function () { store.size = size; save(); startTurns({ mode: 'local', size: size, first: 0, me: 0, seed: Math.floor(Math.random() * 1e9) }); } }]
+      kind: 'setup', eyebrow: 'Two players · one phone', title: 'Pass & play', body: chipGroup('Board', [['small', 'Compact'], ['big', 'Grand']], size, function (v) { size = v; }),
+      actions: [{ label: 'Cancel' }, { label: 'Start duel', icon: 'play', primary: true, run: function () { store.size = size; save(); startTurns({ mode: 'local', size: size, first: 0, me: 0, seed: Math.floor(Math.random() * 1e9) }); } }]
     });
   });
   $('btn-ai').addEventListener('click', function () {
@@ -1114,8 +1189,8 @@
     box.appendChild(chipGroup('Difficulty', [[0, 'Easy'], [1, 'Normal'], [2, 'Hard']], lvl, function (v) { lvl = v; }));
     box.appendChild(chipGroup('Board', [['small', 'Compact'], ['big', 'Grand']], size, function (v) { size = v; }));
     modal({
-      title: 'Vs computer', body: box,
-      actions: [{ label: 'Cancel' }, { label: 'Start duel', primary: true, run: function () { store.size = size; store.aiLevel = lvl; save(); startTurns({ mode: 'ai', size: size, aiLevel: lvl, first: 0, me: 0, seed: Math.floor(Math.random() * 1e9) }); } }]
+      kind: 'setup', eyebrow: 'Take turns against the AI', title: 'Vs computer', body: box,
+      actions: [{ label: 'Cancel' }, { label: 'Start duel', icon: 'play', primary: true, run: function () { store.size = size; store.aiLevel = lvl; save(); startTurns({ mode: 'ai', size: size, aiLevel: lvl, first: 0, me: 0, seed: Math.floor(Math.random() * 1e9) }); } }]
     });
   });
   $('btn-online').addEventListener('click', openLobby);
@@ -1183,7 +1258,13 @@
     Net.join(code);
   });
   $('btn-copy-code').addEventListener('click', function () { copyText(Net.code, 'Room code'); });
-  $('btn-copy-link').addEventListener('click', function () { copyText(location.origin + location.pathname + '?room=' + Net.code, 'Invite link'); });
+  // In the app the page lives at https://localhost, so a link is useless there: share the code instead.
+  $('btn-copy-link').addEventListener('click', function () {
+    var msg = Shell.isNative ? 'Play Jade Rush with me! Open Online duel, tap Join a room and enter ' + Net.code + '.'
+      : location.origin + location.pathname + '?room=' + Net.code;
+    if (Shell.isNative && navigator.share) navigator.share({ text: msg }).catch(function () { copyText(msg, 'Invite'); });
+    else copyText(msg, Shell.isNative ? 'Invite' : 'Invite link');
+  });
   $('emotes').addEventListener('click', function (e) {
     var b = e.target.closest('[data-emote]'); if (!b) return;
     Net.send({ t: 'emote', e: b.dataset.emote }); showEmote(b.dataset.emote, true);
@@ -1237,6 +1318,7 @@
       }
       var win = G.lastMatch ? 1 - (now - G.lastMatch) / COMBO_MS : 0;
       $('combo-bar').style.width = Math.max(0, win * 100) + '%';
+      $('combo').parentNode.style.setProperty('--combo', Math.max(0, win).toFixed(3));
       if (win <= 0 && G.combo > 0 && !G.over) { G.combo = 0; setHeat(0); updateTimedHud(); }
     }
     if (!$('game').hidden && G.lay) { tickTimed(dt); tickTurns(now); board.frame(now); }
