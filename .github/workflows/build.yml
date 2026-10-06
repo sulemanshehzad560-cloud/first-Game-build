@@ -155,7 +155,7 @@ jobs:
   ios:
     name: iOS build and simulator test
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
     steps:
@@ -173,18 +173,22 @@ jobs:
         run: xcodebuild -version
 
       - name: Build for the iOS simulator
+        timeout-minutes: 25
         run: |
           set -o pipefail
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/ios CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= ENABLE_DEBUG_DYLIB=NO build 2>&1 | tail -40
 
+      # A stalled macOS runner must fail this step, not eat the whole job (the release waits on it).
       - name: Simulator self-test
+        timeout-minutes: 15
         run: bash ci/ios-smoke.sh
 
       # Runs only when App Store Connect API key secrets are configured (see docs/APP_STORE_GUIDE.md).
       - name: Signed archive, .ipa and TestFlight upload
         if: env.ASC_KEY_ID != ''
+        timeout-minutes: 30
         env:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
