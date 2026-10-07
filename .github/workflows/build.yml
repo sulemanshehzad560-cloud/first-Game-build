@@ -185,11 +185,40 @@ jobs:
         timeout-minutes: 25
         run: bash ci/ios-smoke.sh
 
-      # Runs only when App Store Connect API key secrets are configured (see docs/APP_STORE_GUIDE.md).
-      # It does not wait on the simulator self-test passing: that test runs on a shared macOS runner
-      # that sometimes stalls, and the job still fails (and reports) when the self-test does.
+      - name: Zip the simulator app
+        if: always()
+        run: |
+          mkdir -p ios-out
+          APP=$(find build/ios/Build/Products -maxdepth 2 -name App.app -path '*iphonesimulator*' | head -1)
+          [ -n "$APP" ] && (cd "$(dirname "$APP")" && zip -q -r "$GITHUB_WORKSPACE/ios-out/jade-rush-simulator.app.zip" App.app) || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-results
+          path: ios-out/
+
+  # App Store build: its own macOS runner, so a stalled simulator test cannot hold it up. Runs only
+  # when the App Store Connect secrets and the Team ID are configured (see docs/APP_STORE_GUIDE.md).
+  testflight:
+    name: iOS App Store build and TestFlight upload
+    if: ${{ vars.APPLE_TEAM_ID != '' }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Copy web game into the iOS project
+        run: npm ci && npm run build && npx cap sync ios
+
       - name: Signed archive, .ipa and TestFlight upload
-        if: ${{ !cancelled() && env.ASC_KEY_ID != '' }}
         timeout-minutes: 30
         env:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -215,22 +244,15 @@ jobs:
           xcrun altool --upload-app -f "ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
           echo "PASS signed build ${CODE} uploaded to App Store Connect (TestFlight)" | tee -a ios-out/report.txt
 
-      - name: Zip the simulator app
-        if: always()
-        run: |
-          mkdir -p ios-out
-          APP=$(find build/ios/Build/Products -maxdepth 2 -name App.app -path '*iphonesimulator*' | head -1)
-          [ -n "$APP" ] && (cd "$(dirname "$APP")" && zip -q -r "$GITHUB_WORKSPACE/ios-out/jade-rush-simulator.app.zip" App.app) || true
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ios-results
+          name: testflight-results
           path: ios-out/
 
   release:
     name: Publish GitHub release
-    needs: [build, emulator, ios]
+    needs: [build, emulator, ios, testflight]
     if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -251,13 +273,21 @@ jobs:
           name: ios-results
           path: ios
 
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: testflight-results
+          path: testflight
+
       - name: Release notes
         env:
           CODE: ${{ needs.build.outputs.code }}
           TESTS: ${{ needs.emulator.result }}
           IOS: ${{ needs.ios.result }}
+          TESTFLIGHT: ${{ needs.testflight.result }}
         run: |
           if [ -d e2e ]; then (cd e2e && zip -q -r ../dist/emulator-test-results.zip .); fi
+          mv testflight/*.ipa dist/ 2>/dev/null || true
           if [ -d ios ]; then
             mv ios/*.ipa dist/ 2>/dev/null || true
             mv ios/jade-rush-simulator.app.zip dist/ 2>/dev/null || true
@@ -275,6 +305,9 @@ jobs:
             echo
             echo "iOS simulator tests: ${IOS}"
             if [ -f ios/report.txt ]; then echo; echo '```'; cat ios/report.txt; echo '```'; fi
+            echo
+            echo "App Store / TestFlight upload: ${TESTFLIGHT}"
+            if [ -f testflight/report.txt ]; then cat testflight/report.txt; fi
           } > dist/RELEASE-NOTES.md
           cat dist/RELEASE-NOTES.md
 
