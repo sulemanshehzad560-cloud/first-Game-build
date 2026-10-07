@@ -155,7 +155,7 @@ jobs:
   ios:
     name: iOS build and simulator test
     runs-on: macos-latest
-    timeout-minutes: 90
+    timeout-minutes: 40
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
     steps:
