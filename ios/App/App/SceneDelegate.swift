@@ -29,7 +29,8 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(BuildInfoPlugin())
         #if DEBUG
         // The self-test is read from stdout redirected to a file, which is block-buffered by default.
-        if ProcessInfo.processInfo.arguments.contains("-JadeSelfTest") { setvbuf(stdout, nil, _IOLBF, 0) }
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-JadeSelfTest") || args.contains("-JadeDemo") { setvbuf(stdout, nil, _IOLBF, 0) }
         #endif
     }
 
@@ -51,9 +52,12 @@ public class BuildInfoPlugin: CAPPlugin, CAPBridgedPlugin {
         let debug = true
         // CI launches the simulator build with -JadeSelfTest to run the in-app self-test.
         let selfTest = ProcessInfo.processInfo.arguments.contains("-JadeSelfTest")
+        // -JadeDemo tours the app at full quality so CI can screen-record it.
+        let demo = ProcessInfo.processInfo.arguments.contains("-JadeDemo")
         #else
         let debug = false
         let selfTest = false
+        let demo = false
         #endif
         let unit = Bundle.main.object(forInfoDictionaryKey: "JadeInterstitialUnit") as? String ?? ""
         call.resolve([
@@ -61,7 +65,8 @@ public class BuildInfoPlugin: CAPPlugin, CAPBridgedPlugin {
             "facebook": false,
             "platform": "ios",
             "interstitialId": unit,
-            "selfTest": selfTest
+            "selfTest": selfTest,
+            "demo": demo
         ])
     }
 }

@@ -1,0 +1,50 @@
+# Records a demo video of the iPhone app (for App Review and the store listing) and publishes it on
+# the "ios-demo-video" release. Run it from Actions -> "iOS demo video" -> Run workflow.
+name: iOS demo video
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Copy web game into the iOS project
+        run: npm ci && npm run build && npx cap sync ios
+
+      - name: Build for the iOS simulator
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= ENABLE_DEBUG_DYLIB=NO build 2>&1 | tail -20
+
+      - name: Record the demo
+        timeout-minutes: 20
+        run: bash ci/ios-demo.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-demo
+          path: demo-out/
+
+      - name: Publish the video
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-demo-video --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create ios-demo-video demo-out/jade-rush-demo.mp4 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Jade Rush iPhone demo video" --notes "Screen recording of the app on the iPhone simulator ($(date -u +%Y-%m-%d))." --prerelease

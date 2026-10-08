@@ -85,9 +85,65 @@
     console.log('SELFTEST DONE pass=' + pass + ' fail=' + fail);
   }
 
+  // Demo mode (-JadeDemo, debug builds only): the same app at full quality, toured slowly so CI can screen-record
+  // it for App Review. Plays a level and a bit of the next, then visits every main screen.
+  async function demo() {
+    var visible = function (sel) { return Array.prototype.find.call(document.querySelectorAll(sel), function (b) { return b.offsetParent !== null; }); };
+    var back = function () { var b = visible('[data-back]'); if (b) b.click(); };
+    var play = async function (pairs, gap) {
+      for (var n = 0; n < pairs; n++) {
+        var G = global.JadeRush.state();
+        if (!G || G.over || !G.lay) return;
+        if (G.turn !== undefined && G.duel === 'turns' && G.turn !== (G.me || 0)) { await sleep(800); continue; }
+        // follow the deal's solution order where there is one (greedy pairs can dead-end a board)
+        var sol = G.gen && G.gen.solution, fp = null;
+        if (sol) fp = sol.find(function (p) { return G.present[p[0]] && G.present[p[1]] && global.Mahjong.isFree(G.lay, G.present, p[0]) && global.Mahjong.isFree(G.lay, G.present, p[1]); });
+        fp = fp || global.Mahjong.freePairs(G.lay, G.present, G.kinds)[0];
+        if (!fp) return;
+        var idle = function () { return !global.JadeRush.board.busy(); }, left = G.left;
+        await until(idle, 4000);
+        if (G.sel >= 0 && G.sel !== fp[0]) { tap(G.sel); await sleep(200); }   // clear a stray selection
+        if (G.sel !== fp[0]) { tap(fp[0]); await sleep(450); }
+        await until(idle, 4000); tap(fp[1]);
+        await until(function () { var S = global.JadeRush.state(); return S.over || S.left < left || (S.scores && S !== G); }, 3000);
+        await sleep(gap);
+      }
+    };
+    console.log('SELFTEST DEMO start');
+    await sleep(6000);                                         // home: scenery, music, demo board
+    $('btn-continue').click(); await until(boardReady, 15000); await sleep(1500);
+    await play(99, 650);                                       // level 1, start to finish
+    await until(function () { return !$('modal').hidden; }, 10000);
+    console.log('SELFTEST STEP level1 done, modal: ' + $('modal-title').textContent + ', left ' + global.JadeRush.state().left);
+    await sleep(4000);                                         // result screen
+    document.querySelector('#modal-actions .primary').click(); await until(boardReady, 15000); await sleep(1500);
+    await play(6, 900);                                        // a few matches of level 2, building a combo
+    $('btn-quit').click(); await sleep(2500);                  // pause menu
+    clickText('Quit'); await sleep(2500);
+    $('btn-levels').click(); await sleep(4000); back(); await sleep(2000);
+    $('btn-daily').click(); await until(boardReady, 15000); await sleep(1500);
+    await play(4, 900); $('btn-quit').click(); await sleep(1500); clickText('Quit'); await sleep(2000);
+    $('btn-themes').click(); await sleep(4500); document.querySelector('#modal-actions .primary').click(); await sleep(1500);
+    $('btn-ai').click(); await sleep(2000);
+    document.querySelector('#modal-actions .primary').click(); await until(boardReady, 15000); await sleep(1500);
+    await play(5, 1200); await sleep(1500);
+    $('btn-quit').click(); await sleep(1500); clickText('Quit'); await sleep(2000);
+    $('btn-online').click(); await sleep(2500); $('btn-host').click(); await sleep(6000); back(); await sleep(2000);
+    $('btn-settings').click(); await sleep(4000); document.querySelector('#modal-actions .primary') && document.querySelector('#modal-actions .primary').click(); await sleep(3000);
+    global.dispatchEvent(new Event('jade-demo-done'));        // ends on Apple's tracking prompt
+    await sleep(6000);
+    console.log('SELFTEST DONE demo');
+  }
+
   // CI's macOS runners have no GPU, so the simulator draws the animated sky in software; run the test in
   // battery-saver mode (same game logic, far less drawing). Set it once, reload, then run.
   Shell.buildInfo().then(function (info) {
+    if (info.demo) {
+      var st = {}; try { st = JSON.parse(localStorage.getItem('jaderush.v1') || '{}'); } catch (e) { /* fresh */ }
+      if (st.seenHowto !== true) { st.seenHowto = true; localStorage.setItem('jaderush.v1', JSON.stringify(st)); location.reload(); return; }
+      setTimeout(function () { demo().catch(function (e) { console.log('SELFTEST DONE demo error ' + (e && e.message)); }); }, 500);
+      return;
+    }
     if (!info.selfTest) return;
     var saved = {}; try { saved = JSON.parse(localStorage.getItem('jaderush.v1') || '{}'); } catch (e) { /* fresh */ }
     if (saved.lite !== true) { saved.lite = true; saved.seenHowto = true; localStorage.setItem('jaderush.v1', JSON.stringify(saved)); location.reload(); return; }

@@ -27,11 +27,12 @@
       .then(function () { loaded = true; loading = false; }, function () { loading = false; });   // retried after the next board
   }
 
+  var demo = false;
   function init() {
     if (!Shell || !Shell.isNative) return;
     try { AdMob = global.Capacitor.registerPlugin('AdMob'); } catch (e) { return; }
     Shell.buildInfo().then(function (bi) {
-      testing = bi.debug; ios = bi.platform === 'ios';
+      testing = bi.debug; ios = bi.platform === 'ios'; demo = !!bi.demo;
       var cfg = bi.platform === 'ios' ? CONFIG.ios : CONFIG.android;
       unit = testing ? cfg.testInterstitialId : (bi.platform === 'ios' ? bi.interstitialId || cfg.interstitialId : cfg.interstitialId);
       if (!unit) throw new Error('no ad unit configured for this build');
@@ -43,7 +44,9 @@
     }).then(function () {
       // iOS: Apple's App Tracking Transparency prompt, after the consent form.
       if (!ios) return null;
-      return AdMob.trackingAuthorizationStatus().then(function (r) {
+      // The recorded demo (debug builds only) asks at the end of its tour, so the prompt does not cover the video.
+      var after = demo ? new Promise(function (r) { global.addEventListener('jade-demo-done', r, { once: true }); }) : Promise.resolve();
+      return after.then(function () { return AdMob.trackingAuthorizationStatus(); }).then(function (r) {
         if (r && r.status === 'notDetermined') return AdMob.requestTrackingAuthorization();
       }, function () { /* Android: not applicable */ });
     }).then(function () {

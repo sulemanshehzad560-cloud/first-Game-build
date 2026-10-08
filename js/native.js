@@ -13,7 +13,7 @@
     /** Build facts from the native side: { debug, facebook }. */
     buildInfo: function () {
       if (!isNative || !BuildInfo) return Promise.resolve({ debug: !isNative, facebook: false });
-      if (!info) info = BuildInfo.isDebug().then(function (r) { r = r || {}; return { debug: !!r.debug, facebook: !!r.facebook, platform: r.platform || 'android', interstitialId: r.interstitialId || '', selfTest: !!r.selfTest }; }, function () { return { debug: false, facebook: false, platform: '', interstitialId: '' }; });
+      if (!info) info = BuildInfo.isDebug().then(function (r) { r = r || {}; return { debug: !!r.debug, facebook: !!r.facebook, platform: r.platform || 'android', interstitialId: r.interstitialId || '', selfTest: !!r.selfTest, demo: !!r.demo }; }, function () { return { debug: false, facebook: false, platform: '', interstitialId: '' }; });
       return info;
     },
     /** Resolves true for debug builds (test ads), false for release builds. */
