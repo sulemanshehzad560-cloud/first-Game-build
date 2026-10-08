@@ -7,7 +7,7 @@ Everything Play Console asks for, in the order it asks. Copy-paste the text bloc
 | Field | Value |
 | --- | --- |
 | App name | Jade Rush |
-| Package name (permanent) | `com.sulemanshehzad.jaderush` |
+| Package name (permanent) | `com.jaderush.app` |
 | Version | 1.0.0 (version code = 200 + GitHub build number) |
 | Default language | English (United States), en-US |
 | App or game | Game |

@@ -33,7 +33,7 @@ To use your own PeerServer, set `window.NOVA_PEER_OPTIONS = { host, port, path, 
 
 ## Android and iPhone apps
 
-The game ships as an Android app built with [Capacitor](https://capacitorjs.com/) (package `com.sulemanshehzad.jaderush`, target API 36).
+The game ships as an Android app built with [Capacitor](https://capacitorjs.com/) (package `com.jaderush.app`, target API 36).
 
 * **iPhone:** the same game as an iOS app (`ios/`, iOS 15+, iPhone). A macOS job builds it, runs an in-app self-test on the iPhone simulator, and signs and uploads it to TestFlight when App Store Connect secrets are set. Checklist: [`docs/APP_STORE_GUIDE.md`](docs/APP_STORE_GUIDE.md).
 * **Builds:** every push runs `.github/workflows/build.yml`. It runs the engine tests and Android lint, builds the debug APK and the release bundle (AAB), tests both on an Android 14 emulator, and attaches everything to a GitHub release. The emulator test drives the game with Playwright: it clears a level, checks pause, a duel, the back button and the logs.

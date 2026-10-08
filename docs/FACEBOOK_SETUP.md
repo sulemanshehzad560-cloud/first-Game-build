@@ -23,7 +23,7 @@ Facebook only lists friends who **also** use Jade Rush **and** granted the frien
 4. **App settings → Advanced → Security**: copy the **Client token**.
 5. **Use cases → Authenticate… → Customize → Permissions**: add **public_profile** and **user_friends**.
 6. **App settings → Basic → Add platform → Android**:
-   * Package name: `com.sulemanshehzad.jaderush`
+   * Package name: `com.jaderush.app`
    * Default activity class: `com.sulemanshehzad.jaderush.MainActivity`
    * Key hashes: add all three:
 

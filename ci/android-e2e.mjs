@@ -5,7 +5,7 @@ import { _android as android } from 'playwright';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
-const PKG = 'com.sulemanshehzad.jaderush';
+const PKG = 'com.jaderush.app';
 const APK = process.env.DEBUG_APK;
 const OUT = 'e2e-out';
 mkdirSync(OUT, { recursive: true });
@@ -51,7 +51,7 @@ async function launchApp() {
   // make sure the screen is on and unlocked, or the page reports itself hidden
   adb('shell input keyevent KEYCODE_WAKEUP'); adb('shell wm dismiss-keyguard');
   adb('logcat -c');
-  await device.shell(`am start -W -n ${PKG}/.MainActivity`);
+  await device.shell(`am start -W -n ${PKG}/com.sulemanshehzad.jaderush.MainActivity`);
   await sleep(12000);
   return bridgeStarts();
 }
@@ -128,7 +128,7 @@ async function step(name, fn) {
     console.log('   app pid after failure: ' + (pid || 'none'));
     const tail = adb('logcat -d -t 400').split('\n').filter(l => /chromium|crash|FATAL|AndroidRuntime|Capacitor|jaderush|lowmemorykiller|Renderer/i.test(l)).slice(-40);
     console.log('   logcat:\n   ' + tail.join('\n   '));
-    try { if (!pid) { await device.shell(`am start -W -n ${PKG}/.MainActivity`); } await Promise.race([connect(), new Promise((_, r) => setTimeout(() => r(new Error('reconnect timed out')), 90000))]); } catch (e2) { console.log('   reconnect failed: ' + e2.message); }
+    try { if (!pid) { await device.shell(`am start -W -n ${PKG}/com.sulemanshehzad.jaderush.MainActivity`); } await Promise.race([connect(), new Promise((_, r) => setTimeout(() => r(new Error('reconnect timed out')), 90000))]); } catch (e2) { console.log('   reconnect failed: ' + e2.message); }
   } finally { clearTimeout(timer); }
 }
 const shot = async name => { try { writeFileSync(`${OUT}/${name}.png`, await device.screenshot()); } catch (e) { /* ignore */ } };
@@ -231,7 +231,7 @@ await step('tile sets and back button', async () => {
 
 await step('background and resume', async () => {
   await device.shell('input keyevent 3'); await sleep(1500);
-  await device.shell(`am start -n ${PKG}/.MainActivity`); await sleep(2500);
+  await device.shell(`am start -n ${PKG}/com.sulemanshehzad.jaderush.MainActivity`); await sleep(2500);
   const alive = (await device.shell(`pidof ${PKG}`)).toString().trim();
   log(!!alive, 'App survives background/foreground (pid ' + alive + ')');
 });

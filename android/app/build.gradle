@@ -20,7 +20,7 @@ android {
     namespace = "com.sulemanshehzad.jaderush"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.sulemanshehzad.jaderush"
+        applicationId "com.jaderush.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(System.getenv('JADE_VERSION_CODE') ?: '1')
