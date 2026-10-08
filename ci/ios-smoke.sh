@@ -2,7 +2,7 @@
 # iOS simulator test: install the debug build, launch it with -JadeSelfTest, follow the in-app
 # self-test through the app's stdout, screenshot each checkpoint, and fail on any FAIL or crash.
 set -uo pipefail
-BUNDLE=com.sulemanshehzad.jaderush
+BUNDLE=com.jaderush.app
 OUT="$PWD/ios-out"   # absolute: simctl hands --stdout/--stderr paths to launchd inside the simulator
 mkdir -p "$OUT"
 APP=$(find build/ios/Build/Products -maxdepth 2 -name "App.app" -path "*iphonesimulator*" | head -1)

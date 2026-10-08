@@ -248,7 +248,7 @@ jobs:
           IPA="ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
           if [ -n "$ASC_APP_ID" ]; then
             # The app's numeric Apple ID (App Store Connect -> App Information) skips the bundle ID lookup.
-            xcrun altool --upload-package "$IPA" --type ios --apple-id "$ASC_APP_ID" --bundle-id com.sulemanshehzad.jaderush \
+            xcrun altool --upload-package "$IPA" --type ios --apple-id "$ASC_APP_ID" --bundle-id com.jaderush.app \
               --bundle-version "$CODE" --bundle-short-version-string "$VERSION_NAME" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
           else
             xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20

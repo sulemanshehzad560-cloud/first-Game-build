@@ -7,8 +7,9 @@ The iOS app is built from the same game as Android (Capacitor 8, iOS 15+). GitHu
 | Field | Value |
 | --- | --- |
 | Name | Jade Rush |
-| Bundle ID (permanent) | `com.sulemanshehzad.jaderush` |
-| SKU | `jaderush-ios` (any unique text) |
+| Bundle ID (permanent) | `com.jaderush.app` (the Android package stays `com.sulemanshehzad.jaderush`) |
+| SKU | `JADERUSH001` |
+| Apple ID (App Store Connect) | `6820185655` |
 | Version | 1.0.0 (build number = 200 + GitHub build number) |
 | Primary language | English (U.S.) |
 | Category | Games → Board (secondary: Games → Puzzle) |
@@ -18,8 +19,8 @@ The iOS app is built from the same game as Android (Capacitor 8, iOS 15+). GitHu
 
 ## 2. What you create at Apple (once)
 
-1. **Bundle ID**: <https://developer.apple.com/account/resources/identifiers/list> → **+** → App IDs → App → Description `Jade Rush`, Explicit Bundle ID `com.sulemanshehzad.jaderush`. No extra capabilities are needed.
-2. **App record**: <https://appstoreconnect.apple.com/apps> → **+** → New App → iOS, name **Jade Rush**, the bundle ID above, SKU `jaderush-ios`, Full Access.
+1. **Bundle ID**: <https://developer.apple.com/account/resources/identifiers/list> → **+** → App IDs → App → Description `Jade Rush`, Explicit Bundle ID `com.jaderush.app`. No extra capabilities are needed.
+2. **App record**: <https://appstoreconnect.apple.com/apps> → **+** → New App → iOS, name **Jade Rush**, the bundle ID above, SKU `JADERUSH001`, Full Access.
 3. **App Store Connect API key** (lets GitHub sign and upload): App Store Connect → **Users and Access → Integrations → App Store Connect API → Team Keys → +**. Name `GitHub builds`, access **Admin** (needed so Xcode can create the distribution certificate and profile for you). Download the `.p8` file (you can only download it once) and note the **Key ID** and **Issuer ID**.
 4. **Team ID**: <https://developer.apple.com/account> → Membership details → Team ID (10 characters).
 
