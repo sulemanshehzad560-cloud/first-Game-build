@@ -47,4 +47,6 @@ if command -v ffmpeg >/dev/null; then
 else
   cp "$OUT/raw.mp4" "$OUT/jade-rush-demo.mp4"
 fi
+rm -f "$OUT/raw.mp4"
+ls -la "$OUT"
 grep -q 'SELFTEST DONE demo$' "$OUT/stdout.txt"

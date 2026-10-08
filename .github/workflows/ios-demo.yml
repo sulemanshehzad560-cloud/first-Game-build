@@ -35,16 +35,20 @@ jobs:
         timeout-minutes: 20
         run: bash ci/ios-demo.sh
 
+      - name: Publish the video
+        env:
+          GH_TOKEN: ${{ github.token }}
+        timeout-minutes: 10
+        run: |
+          ls -la demo-out
+          gh release delete ios-demo-video --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create ios-demo-video demo-out/jade-rush-demo.mp4 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Jade Rush iPhone demo video" --notes "Screen recording of the app on the iPhone simulator ($(date -u +%Y-%m-%d))." --prerelease
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ios-demo
-          path: demo-out/
-
-      - name: Publish the video
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release delete ios-demo-video --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
-          gh release create ios-demo-video demo-out/jade-rush-demo.mp4 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Jade Rush iPhone demo video" --notes "Screen recording of the app on the iPhone simulator ($(date -u +%Y-%m-%d))." --prerelease
+          path: |
+            demo-out/jade-rush-demo.mp4
+            demo-out/stdout.txt
