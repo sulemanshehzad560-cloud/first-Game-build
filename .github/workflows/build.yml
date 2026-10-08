@@ -242,9 +242,21 @@ jobs:
             -destination 'generic/platform=iOS' -archivePath build/JadeRush.xcarchive archive \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             CURRENT_PROJECT_VERSION="$CODE" MARKETING_VERSION="$VERSION_NAME" "${ADS[@]}" 2>&1 | tail -30
+          # Pre-built frameworks (Google Mobile Ads, UMP) arrive signed by their vendor; in an unsigned archive
+          # that signature stays and App Store Connect rejects it (error 90035). Strip it so the export signs
+          # every framework with the distribution certificate.
+          for f in build/JadeRush.xcarchive/Products/Applications/App.app/Frameworks/*.framework; do
+            codesign --remove-signature "$f" 2>/dev/null || true; rm -rf "$f/_CodeSignature"
+          done
           sed "s/TEAM_ID_PLACEHOLDER/$APPLE_TEAM_ID/" ci/ios-export.plist > build/export.plist
           xcodebuild -exportArchive -archivePath build/JadeRush.xcarchive -exportPath build/ipa -exportOptionsPlist build/export.plist "${AUTH[@]}" 2>&1 | tail -20
           mkdir -p ios-out && cp build/ipa/*.ipa "ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
+          # Check the signatures before uploading, so a signing problem shows up here rather than as a rejection.
+          rm -rf build/check && mkdir -p build/check && unzip -q build/ipa/*.ipa -d build/check
+          for f in build/check/Payload/App.app/Frameworks/*.framework build/check/Payload/App.app; do
+            echo "$(basename "$f"): $(codesign -dv "$f" 2>&1 | grep -E '^Authority=' | head -1)"
+          done
+          codesign --verify --deep --strict --verbose=2 build/check/Payload/App.app
           IPA="ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
           if [ -n "$ASC_APP_ID" ]; then
             # The app's numeric Apple ID (App Store Connect -> App Information) skips the bundle ID lookup.
