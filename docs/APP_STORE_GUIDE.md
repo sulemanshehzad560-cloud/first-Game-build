@@ -10,7 +10,7 @@ The iOS app is built from the same game as Android (Capacitor 8, iOS 15+). GitHu
 | Bundle ID (permanent) | `com.jaderush.app` (same as the Android package) |
 | SKU | `JADERUSH001` |
 | Apple ID (App Store Connect) | `6820185655` |
-| Version | 1.0.0 (build number = 200 + GitHub build number) |
+| Version | 1.0.0 (build number = 1000 + GitHub build number) |
 | Primary language | English (U.S.) |
 | Category | Games → Board (secondary: Games → Puzzle) |
 | Price | Free |
