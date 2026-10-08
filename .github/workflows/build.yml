@@ -224,6 +224,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          ASC_APP_ID: ${{ vars.ASC_APP_ID }}
           ADMOB_IOS_APP_ID: ${{ vars.ADMOB_IOS_APP_ID }}
           ADMOB_IOS_INTERSTITIAL_ID: ${{ vars.ADMOB_IOS_INTERSTITIAL_ID }}
         run: |
@@ -244,7 +245,14 @@ jobs:
           sed "s/TEAM_ID_PLACEHOLDER/$APPLE_TEAM_ID/" ci/ios-export.plist > build/export.plist
           xcodebuild -exportArchive -archivePath build/JadeRush.xcarchive -exportPath build/ipa -exportOptionsPlist build/export.plist "${AUTH[@]}" 2>&1 | tail -20
           mkdir -p ios-out && cp build/ipa/*.ipa "ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
-          xcrun altool --upload-app -f "ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
+          IPA="ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
+          if [ -n "$ASC_APP_ID" ]; then
+            # The app's numeric Apple ID (App Store Connect -> App Information) skips the bundle ID lookup.
+            xcrun altool --upload-package "$IPA" --type ios --apple-id "$ASC_APP_ID" --bundle-id com.sulemanshehzad.jaderush \
+              --bundle-version "$CODE" --bundle-short-version-string "$VERSION_NAME" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
+          else
+            xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
+          fi
           echo "PASS signed build ${CODE} uploaded to App Store Connect (TestFlight)" | tee -a ios-out/report.txt
 
       - uses: actions/upload-artifact@v4
