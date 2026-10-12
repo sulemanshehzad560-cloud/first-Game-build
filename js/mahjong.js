@@ -179,7 +179,7 @@
       secPerTile: L <= 42 ? Math.max(1.5, 3.6 - L * 0.05) : +(1.5 - tail * 0.35).toFixed(3),
       shuffles: L < 8 ? 3 : L < 20 ? 2 : 1,
       hints: L < 8 ? 3 : L < 20 ? 2 : 1,
-      showFree: true   // blocked tiles stay dimmed on every level
+      showFree: L <= 500   // blocked tiles are dimmed up to level 500
     };
   }
 

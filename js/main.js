@@ -562,10 +562,10 @@
     $('rival').hidden = cfg.duel !== 'race';
     $('btn-hint').hidden = false; $('btn-shuffle').hidden = false;
     $('emotes').hidden = cfg.duel !== 'race'; $('goal').hidden = cfg.duel === 'race';
-    $('goal').textContent = 'Match free tiles in pairs. Dimmed tiles are blocked.';
+    $('goal').textContent = gen.spec.showFree !== false ? 'Match free tiles in pairs. Dimmed tiles are blocked.' : 'Match free tiles in pairs. Look for open sides!';
     board.accent = currentTheme().accent;
     applyBoardStyle();
-    mountBoard(true);
+    mountBoard(gen.spec.showFree !== false);
     updateTimedHud();
   }
 
@@ -1612,7 +1612,7 @@
     var cards = [
       ['Match the pairs', 'Tap two identical tiles to clear them. Clear the whole board to win.',
         '<div class="art art-match">' + t('東', 'red pick') + '<i class="art-plus">+</i>' + t('東', 'red pick') + '<i class="art-burst"></i></div>'],
-      ['Only free tiles', 'A tile is free when nothing sits on it and its left or right side is open. Blocked tiles are dimmed.',
+      ['Only free tiles', 'A tile is free when nothing sits on it and its left or right side is open. Blocked tiles are dimmed up to level 500.',
         '<div class="art art-free"><div class="art-row">' + t('中', 'red ok') + t('發', 'green no') + t('北', 'ok') + '</div><div class="art-top">' + t('西', 'ok') + '</div></div>'],
       ['Chain combos', 'Make your next match within 5 seconds to grow the multiplier, up to ×12.',
         '<div class="art art-combo"><b>×2</b><b>×5</b><b>×9</b><b class="hot">×12</b></div>'],
