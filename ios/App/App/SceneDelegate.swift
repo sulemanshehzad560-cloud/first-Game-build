@@ -11,6 +11,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window = UIWindow(windowScene: windowScene)
         window?.rootViewController = MainViewController()
         window?.makeKeyAndVisible()
+        // Plugins such as AdMob look for the window on the app delegate (consent form, ads), so share it there too.
+        (UIApplication.shared.delegate as? AppDelegate)?.window = window
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
     }
