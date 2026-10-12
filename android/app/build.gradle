@@ -14,6 +14,13 @@ def releaseStore = signingValue('storeFile', 'JADE_KEYSTORE_FILE')
 def fbAppId = (System.getenv('FB_APP_ID') ?: (project.findProperty('jade.facebookAppId') ?: '')).toString().trim()
 def fbClientToken = (System.getenv('FB_CLIENT_TOKEN') ?: (project.findProperty('jade.facebookClientToken') ?: '')).toString().trim()
 def fbEnabled = !fbAppId.isEmpty() && !fbClientToken.isEmpty()
+
+// Google Play Games Services: the numeric project ID from Play Console -> Play Games Services -> Configuration,
+// as the PGS_APP_ID repository variable or jade.playGamesAppId in android/gradle.properties.
+// Without it sign-in and leaderboards stay off and the game keeps scores on the phone.
+def pgsAppId = (System.getenv('PGS_APP_ID') ?: (project.findProperty('jade.playGamesAppId') ?: '')).toString().trim()
+def pgsEnabled = pgsAppId ==~ /\d{6,}/
+if (!pgsEnabled) pgsAppId = '0'
 if (!fbEnabled) { fbAppId = '100000000000000'; fbClientToken = 'not-configured' }
 
 android {
@@ -24,11 +31,12 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(System.getenv('JADE_VERSION_CODE') ?: '1')
-        versionName "1.0.0"
+        versionName "1.1.0"
         resValue "string", "facebook_app_id", fbAppId
         resValue "string", "facebook_client_token", fbClientToken
         resValue "string", "fb_login_protocol_scheme", "fb" + fbAppId
         buildConfigField "boolean", "FACEBOOK_ENABLED", fbEnabled.toString()
+        resValue "string", "game_services_project_id", pgsAppId
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -65,9 +73,12 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // Play Games only accepts the store-signed app, so debug builds keep it off.
+            buildConfigField "boolean", "PLAY_GAMES_ENABLED", "false"
         }
         release {
             if (releaseStore) signingConfig signingConfigs.release
+            buildConfigField "boolean", "PLAY_GAMES_ENABLED", pgsEnabled.toString()
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -86,6 +97,7 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    implementation "com.google.android.gms:play-services-games-v2:20.1.2"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

@@ -18,6 +18,27 @@
     { id: 'obsidian', name: 'Ebony', stars: 160, face: ['#43352e', '#261c18'], grain: '#0c0806', body: ['#2e231e', '#16100d'], back: ['#c9a24a', '#6e5218'], pal: 'dark', accent: '#e8c46a', bg: ['#06070e', '#191d3a', '#6c7cff', '#e8c46a'] }
   ];
 
+  // Shop designs (bought with coins or videos). Each pairs a face material with a coloured back; the back colour
+  // also picks the night scenery and music (scene). Classic woods re-coloured, then stone and metal finishes.
+  var BACKS = [
+    { id: 'emerald', name: 'Emerald', back: ['#2f7d5b', '#123d2c'], accent: '#7cffcb', scene: 'jade' },
+    { id: 'crimson', name: 'Crimson', back: ['#b8325e', '#5e1030'], accent: '#ff5fa2', scene: 'sakura' },
+    { id: 'sapphire', name: 'Sapphire', back: ['#1b7fa3', '#0a3d58'], accent: '#38d6ff', scene: 'lagoon' },
+    { id: 'amber', name: 'Amber', back: ['#c25a1a', '#5e2405'], accent: '#ffb347', scene: 'ember' },
+    { id: 'violet', name: 'Violet', back: ['#5b2fa0', '#25104c'], accent: '#c59bff', scene: 'royal' },
+    { id: 'onyx', name: 'Onyx', back: ['#c9a24a', '#6e5218'], accent: '#e8c46a', scene: 'obsidian' }
+  ];
+  var MATERIALS = [
+    { id: 'marble', name: 'Marble', face: ['#f4f1ea', '#d9d5cc'], grain: '#6e6a66', body: ['#cfcac0', '#a29d93'], pal: 'light', price: 400 },
+    { id: 'ivory', name: 'Ivory', face: ['#fbf3df', '#e8d9b5'], grain: '#b8a57a', body: ['#e2d3ae', '#bfae86'], pal: 'light', price: 400 },
+    { id: 'bamboo', name: 'Bamboo', face: ['#e3c770', '#b9973d'], grain: '#7a5a1c', body: ['#c9a650', '#8f7230'], pal: 'light', price: 400 },
+    { id: 'jadestone', name: 'Jade stone', face: ['#4fbf8d', '#0f6b47'], grain: '#06301f', body: ['#2f8f63', '#145a3c'], pal: 'dark', price: 700 },
+    { id: 'rosequartz', name: 'Rose quartz', face: ['#f2b8c6', '#e08aa3'], grain: '#b05a74', body: ['#d98ba1', '#b0607a'], pal: 'light', price: 700 },
+    { id: 'lapis', name: 'Lapis', face: ['#2c4fc4', '#0b1f6b'], grain: '#061040', body: ['#1d3a9e', '#0b1f6b'], pal: 'dark', price: 700 },
+    { id: 'gold', name: 'Gold leaf', face: ['#f6d77a', '#a8781e'], grain: '#7a5310', body: ['#c99a3a', '#8a6216'], pal: 'light', price: 1000 },
+    { id: 'obsidianglass', name: 'Obsidian glass', face: ['#2a2940', '#07070c'], grain: '#000000', body: ['#1c1b2e', '#0a0a12'], pal: 'dark', price: 1000 }
+  ];
+
   // Traditional enamel paint for light woods; ivory and metal inlay for dark woods.
   var PALETTES = {
     light: { blue: '#1c3a86', green: '#0b5e3c', red: '#a8141f', ink: '#16110c', gold: '#8a5d14', teal: '#0d625f' },
@@ -169,5 +190,23 @@
     return ['Red', 'Green', 'White'][kind - 31] + ' dragon';
   }
 
-  global.MahjongTiles = { drawFace: drawFace, kindName: kindName, THEMES: THEMES, PALETTES: PALETTES, mix: mix, GLYPH_FONT: GLYPH_FONT };
+  var byId = {};
+  THEMES.forEach(function (t) { t.group = 'classic'; t.wood = t.id; t.scene = t.id; byId[t.id] = t; });
+  var SHOP = [];
+  THEMES.forEach(function (w) {          // classic woods with the other backs
+    BACKS.forEach(function (b) {
+      if (b.scene === w.id) return;
+      SHOP.push({ id: w.id + '-' + b.id, name: w.name + ' · ' + b.name, group: 'woods', price: 200, wood: w.id, scene: b.scene,
+        face: w.face, grain: w.grain, body: w.body, back: b.back, pal: w.pal, accent: b.accent, bg: byId[b.scene].bg });
+    });
+  });
+  MATERIALS.forEach(function (m) {
+    BACKS.forEach(function (b) {
+      SHOP.push({ id: m.id + '-' + b.id, name: m.name + ' · ' + b.name, group: m.id, price: m.price, wood: m.id, scene: b.scene,
+        face: m.face, grain: m.grain, body: m.body, back: b.back, pal: m.pal, accent: b.accent, bg: byId[b.scene].bg });
+    });
+  });
+  var TILESETS = THEMES.concat(SHOP);
+
+  global.MahjongTiles = { drawFace: drawFace, kindName: kindName, THEMES: THEMES, SHOP: SHOP, TILESETS: TILESETS, MATERIALS: MATERIALS, PALETTES: PALETTES, mix: mix, GLYPH_FONT: GLYPH_FONT };
 })(this);

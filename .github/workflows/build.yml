@@ -4,6 +4,11 @@ on:
   push:
     branches: [ccr-61d5e997-33280i]
   workflow_dispatch:
+    inputs:
+      upload_ios:
+        description: Upload the signed iOS build to App Store Connect (TestFlight)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -13,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  VERSION_NAME: 1.0.0
+  VERSION_NAME: 1.1.0
 
 jobs:
   build:
@@ -74,6 +79,7 @@ jobs:
           JADE_VERSION_CODE: ${{ steps.meta.outputs.code }}
           FB_APP_ID: ${{ vars.FB_APP_ID }}
           FB_CLIENT_TOKEN: ${{ vars.FB_CLIENT_TOKEN }}
+          PGS_APP_ID: ${{ vars.PGS_APP_ID }}
           JADE_KEYSTORE_PASSWORD: ${{ secrets.JADE_KEYSTORE_PASSWORD }}
           JADE_KEY_ALIAS: ${{ secrets.JADE_KEY_ALIAS }}
           JADE_KEY_PASSWORD: ${{ secrets.JADE_KEY_PASSWORD }}
@@ -201,7 +207,7 @@ jobs:
   # App Store build: its own macOS runner, so a stalled simulator test cannot hold it up. Runs only
   # when the App Store Connect secrets and the Team ID are configured (see docs/APP_STORE_GUIDE.md).
   testflight:
-    name: iOS App Store build and TestFlight upload
+    name: iOS App Store build (TestFlight upload only when asked)
     if: ${{ vars.APPLE_TEAM_ID != '' }}
     runs-on: macos-latest
     timeout-minutes: 45
@@ -227,6 +233,8 @@ jobs:
           ASC_APP_ID: ${{ vars.ASC_APP_ID }}
           ADMOB_IOS_APP_ID: ${{ vars.ADMOB_IOS_APP_ID }}
           ADMOB_IOS_INTERSTITIAL_ID: ${{ vars.ADMOB_IOS_INTERSTITIAL_ID }}
+          # Uploading needs the owner's go-ahead: only a manual run with "upload_ios" ticked sends the build to Apple.
+          UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_ios }}
         run: |
           set -eo pipefail
           CODE=$((1000 + GITHUB_RUN_NUMBER))
@@ -257,7 +265,12 @@ jobs:
             echo "$(basename "$f"): $(codesign -dv "$f" 2>&1 | grep -E '^Authority=' | head -1)"
           done
           codesign --verify --deep --strict --verbose=2 build/check/Payload/App.app
+          echo "Entitlements:"; codesign -d --entitlements - --xml build/check/Payload/App.app 2>/dev/null | plutil -p - || true
           IPA="ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
+          if [ "$UPLOAD" != "true" ]; then
+            echo "PASS signed App Store build ${CODE} ready (not uploaded; run the workflow manually with upload_ios to send it)" | tee -a ios-out/report.txt
+            exit 0
+          fi
           if [ -n "$ASC_APP_ID" ]; then
             # The app's numeric Apple ID (App Store Connect -> App Information) skips the bundle ID lookup.
             xcrun altool --upload-package "$IPA" --type ios --apple-id "$ASC_APP_ID" --bundle-id com.jaderush.app \

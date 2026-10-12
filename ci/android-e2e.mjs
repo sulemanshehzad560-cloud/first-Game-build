@@ -193,9 +193,7 @@ await step('pause', async () => {
   await sleep(2500);
   await page.evaluate(() => document.getElementById('btn-quit').click());
   await sleep(600); await shot('06-paused');
-  const t1 = await page.evaluate(() => JadeRush.state().timeLeft); await sleep(2000);
-  const t2 = await page.evaluate(() => JadeRush.state().timeLeft);
-  log(Math.abs(t1 - t2) < 50, 'Pause stops the clock');
+  log(await page.evaluate(() => JadeRush.state().limit === 0 && document.getElementById('clock-fill').parentNode.hidden), 'Journey boards are untimed (no clock)');
   await clickText('Quit'); await sleep(800);
   log(await page.evaluate(() => !document.getElementById('home').hidden), 'Quit from pause returns home');
 });

@@ -67,8 +67,8 @@
     } else this.entry = null;
   };
 
-  TileBoard.prototype.setTheme = function (theme) { this.theme = theme; this.accent = theme.accent; woodImage(theme.id, this); this.sprites.clear(); this.dirty = true; };
-  TileBoard.preloadWood = function (themes) { themes.forEach(function (t) { woodImage(t.id); }); };
+  TileBoard.prototype.setTheme = function (theme) { this.theme = theme; this.accent = theme.accent; woodImage(theme.wood || theme.id, this); this.sprites.clear(); this.dirty = true; };
+  TileBoard.preloadWood = function (themes) { themes.forEach(function (t) { woodImage(t.wood || t.id); }); };
   TileBoard.woodReady = function (id) { return !!(woodTex[id] && woodTex[id].ok); };
 
   TileBoard.prototype.resize = function () {
@@ -119,7 +119,7 @@
     var w = woodTex[id];
     if (!w) {
       w = woodTex[id] = { img: new Image(), ok: false, wait: [] };
-      w.img.onload = function () { w.ok = true; w.wait.forEach(function (b) { if (b.theme.id === id) { b.sprites.clear(); b.dirty = true; if (b.onArt) b.onArt(); } }); w.wait = []; };
+      w.img.onload = function () { w.ok = true; w.wait.forEach(function (b) { if ((b.theme.wood || b.theme.id) === id) { b.sprites.clear(); b.dirty = true; if (b.onArt) b.onArt(); } }); w.wait = []; };
       w.img.src = 'assets/wood/' + id + '.webp';
     }
     if (!w.ok && board && w.wait.indexOf(board) < 0) w.wait.push(board);
@@ -128,7 +128,7 @@
 
   // ---------------------------------------------------------------- sprites
   function woodGrain(g, x, y, w, h, th, seed) {
-    var rand = global.Mahjong.mulberry32(seed), k, tex = woodImage(th.id);
+    var rand = global.Mahjong.mulberry32(seed), k, tex = woodImage(th.wood || th.id);
     if (tex) {
       // each variant shows a different patch of the board, sometimes turned end for end
       var sw = tex.naturalWidth * (0.34 + rand() * 0.12), sh = sw * h / w;
@@ -184,7 +184,7 @@
       rr(g, fx, fy + k, fw, fh, rad); g.fill();
     }
     g.save(); g.globalCompositeOperation = 'source-atop';
-    var etex = woodImage(th.id);
+    var etex = woodImage(th.wood || th.id);
     if (etex) {
       g.globalAlpha = 0.3;
       g.drawImage(etex, variant * 120, 0, fw * 4, (fh + d) * 2, fx, fy + fh * 0.5, fw, fh * 0.5 + d);

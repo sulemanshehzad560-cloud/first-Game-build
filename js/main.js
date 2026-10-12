@@ -7,11 +7,14 @@
   var COLORS = ['#4fd1a5', '#ff7a59'];
   var PRIVACY_URL = 'https://sulemanshehzad560-cloud.github.io/first-Game-build/privacy.html';
   var Shell = window.NativeShell || { isNative: false, onBack: function () {}, onPause: function () {}, onResume: function () {}, versionName: function () { return Promise.resolve('web'); }, styleBars: function () {} };
+  var GS = window.GameServices || { state: { available: false, signedIn: false }, onChange: function () {}, signIn: function () { return Promise.resolve({}); }, submit: function () { return Promise.resolve(false); }, show: function () { return Promise.resolve(false); }, around: function () { return Promise.resolve(null); }, serviceName: function () { return 'Google Play Games'; } };
   var Ads = window.GameAds || { boardFinished: function () {}, between: function (l, next) { next(); }, hasPrivacyOptions: function () { return false; } };
 
   // ------------------------------------------------------------- storage
   var SAVE_KEY = 'jaderush.v1';
-  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true, done: false, music: true, ambience: true };
+  var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true, done: false, music: true, ambience: true,
+    coins: 150, owned: [], board: 'table', adProgress: {}, freeCoins: { day: '', n: 0 },
+    rush: { day: '', best: 0, runs: 0, bestEver: 0, cleared: 0 } };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
   function totalStars() { var s = 0; for (var k in store.stars) s += store.stars[k]; return s; }
@@ -26,13 +29,15 @@
   window.JadeLite = store.lite == null ? !!autoLite() : !!store.lite;
 
   // ------------------------------------------------------------- tile sets, juice
-  var THEMES = window.MahjongTiles.THEMES;
+  var THEMES = window.MahjongTiles.THEMES, TILESETS = window.MahjongTiles.TILESETS;
   var MAX = M.MAX_LEVEL;
   // Drawn rather than a text glyph: Android's system font has no '❚'.
   var PAUSE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></svg>';
   var fmt = function (n) { return n.toLocaleString('en-US'); };
   // Line icons (24px grid, stroke = currentColor) for buttons, settings rows and stat cards.
   var ICON_PATHS = {
+    coin: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.6"/>',
+    bag: '<path d="M6 8h12l-1 12H7z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
     music: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
     leaf: '<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z"/><path d="M5 19l7-7"/>',
     play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
@@ -61,9 +66,10 @@
   function icon(name, size) {
     return '<svg class="ico" viewBox="0 0 24 24" width="' + (size || 20) + '" height="' + (size || 20) + '" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON_PATHS[name] || '') + '</svg>';
   }
+  function owns(t) { return t.group === 'classic' ? totalStars() >= t.stars : (store.owned || []).indexOf(t.id) >= 0; }
   function currentTheme() {
-    var t = THEMES.filter(function (x) { return x.id === store.theme; })[0];
-    return t && totalStars() >= t.stars ? t : THEMES[0];
+    var t = TILESETS.filter(function (x) { return x.id === store.theme; })[0];
+    return t && owns(t) ? t : THEMES[0];
   }
   function applyTheme() {
     var t = currentTheme(), st = document.documentElement.style;
@@ -72,6 +78,59 @@
     st.setProperty('--accent-soft', hexA(t.accent, 0.28)); st.setProperty('--accent-glow', hexA(t.accent, 0.55));
     var meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t.bg[0];
     board.setTheme(t); demo.setTheme(t); sky.setTheme(t);
+    applyBoardStyle();
+  }
+
+  // ------------------------------------------------------------- coins and board designs
+  // Table designs for the felt behind the tiles (bought in the shop). 'table' follows the tile set's colours.
+  var BOARDS = [
+    { id: 'table', name: 'Night table', price: 0 },
+    { id: 'emerald', name: 'Emerald felt', price: 150, felt: ['#1d6b4c', '#0b3123'], frame: '#3b2412', rim: '#f6d58a' },
+    { id: 'crimson', name: 'Crimson velvet', price: 150, felt: ['#8c1f3d', '#3d0716'], frame: '#2b0f0a', rim: '#f2c27a' },
+    { id: 'sapphire', name: 'Sapphire silk', price: 150, felt: ['#1d4f8c', '#0a1d3d'], frame: '#14213b', rim: '#9cc8ff' },
+    { id: 'plum', name: 'Plum satin', price: 150, felt: ['#5b2a7a', '#220c33'], frame: '#1e0f2b', rim: '#d6b3ff' },
+    { id: 'midnight', name: 'Midnight', price: 150, felt: ['#1c2238', '#07090f'], frame: '#0b0d14', rim: '#8f9bd6' },
+    { id: 'teak', name: 'Teak table', price: 300, felt: ['#8a5228', '#4a2a12'], frame: '#2a160a', rim: '#e0b070', pattern: 'repeating-linear-gradient(90deg, rgba(0,0,0,.09) 0 3px, transparent 3px 11px)' },
+    { id: 'bamboo', name: 'Bamboo mat', price: 300, felt: ['#c9a650', '#7d6326'], frame: '#4a3510', rim: '#f3e2a2', pattern: 'repeating-linear-gradient(0deg, rgba(60,40,0,.25) 0 2px, transparent 2px 14px)' },
+    { id: 'marble', name: 'Marble slab', price: 400, felt: ['#d8d4cc', '#9e9a92'], frame: '#5a5650', rim: '#ffffff', pattern: 'linear-gradient(115deg, transparent 38%, rgba(90,85,80,.22) 40%, transparent 43%), linear-gradient(60deg, transparent 60%, rgba(90,85,80,.15) 61%, transparent 63%)' },
+    { id: 'sakura', name: 'Sakura silk', price: 400, felt: ['#c4506f', '#5e1730'], frame: '#3a0c1c', rim: '#ffc2d6', pattern: 'radial-gradient(circle at 30% 30%, rgba(255,210,225,.22) 0 5px, transparent 6px) 0 0 / 46px 46px' },
+    { id: 'wave', name: 'Ocean waves', price: 400, felt: ['#126b8a', '#052b3a'], frame: '#03202b', rim: '#7ee8ff', pattern: 'radial-gradient(circle at 50% 100%, transparent 13px, rgba(255,255,255,.09) 14px 16px, transparent 17px) 0 0 / 36px 18px' },
+    { id: 'stars', name: 'Starry night', price: 500, felt: ['#1b2050', '#05061a'], frame: '#080a20', rim: '#e8c46a', pattern: 'radial-gradient(circle, rgba(255,255,255,.55) 0 1px, transparent 2px) 0 0 / 34px 34px, radial-gradient(circle, rgba(255,240,200,.4) 0 1px, transparent 2px) 17px 17px / 34px 34px' },
+    { id: 'lacquer', name: 'Red lacquer', price: 500, felt: ['#b3261e', '#5c0e0a'], frame: '#1a0503', rim: '#ffd27a', pattern: 'repeating-linear-gradient(45deg, rgba(255,215,140,.07) 0 2px, transparent 2px 9px)' },
+    { id: 'ivory', name: 'Ivory inlay', price: 600, felt: ['#efe3c4', '#b9a77c'], frame: '#5a4120', rim: '#fff8e6', pattern: 'repeating-linear-gradient(90deg, rgba(120,90,40,.12) 0 1px, transparent 1px 22px)' },
+    { id: 'goldleaf', name: 'Gold leaf', price: 800, felt: ['#c79a3e', '#6e5016'], frame: '#3d2c08', rim: '#fff1b8', pattern: 'linear-gradient(135deg, rgba(255,255,255,.16), transparent 60%)' },
+    { id: 'obsidian', name: 'Obsidian glass', price: 800, felt: ['#22213a', '#050509'], frame: '#000000', rim: '#9aa8ff', pattern: 'linear-gradient(120deg, rgba(120,140,255,.18), transparent 40%)' }
+  ];
+  var FREE_COINS = 100, FREE_COINS_PER_DAY = 5;
+  function adsFor(price) { return Math.max(1, Math.round(price / 250)); }
+  function ownsBoard(b) { return !b.price || (store.owned || []).indexOf('board:' + b.id) >= 0; }
+  function currentBoard() { var b = BOARDS.filter(function (x) { return x.id === store.board; })[0]; return b && ownsBoard(b) ? b : BOARDS[0]; }
+  function styleTray(el, b) {
+    var p = function (k, v) { if (v) el.style.setProperty(k, v); else el.style.removeProperty(k); };
+    p('--felt0', b.felt && b.felt[0]); p('--felt1', b.felt && b.felt[1]);
+    p('--tray-frame', b.frame); p('--tray-rim', b.rim); p('--felt-pattern', b.pattern);
+  }
+  function applyBoardStyle() { var t = $('tray'); if (t) styleTray(t, currentBoard()); }
+  function addCoins(n) {
+    store.coins = Math.max(0, (store.coins || 0) + n); save();
+    var pill = $('home-coins'); if (pill) pill.lastChild.textContent = fmt(store.coins);
+  }
+  function coinText(n) { return '<span class="coin">' + icon('coin', 14) + ' ' + fmt(n) + '</span>'; }
+  // Result screens: an optional video doubles the coins just won.
+  function withDoubleCoins(grid, coins) {
+    var wrap = document.createElement('div'), b = document.createElement('button');
+    wrap.className = 'result-wrap'; b.type = 'button'; b.className = 'ad-btn';
+    b.innerHTML = '\u25B6 Double your coins <em>+' + fmt(coins) + '</em>';
+    b.addEventListener('click', function () {
+      if (b.disabled) return;
+      watchAd().then(function (ok) {
+        if (!ok) return;
+        addCoins(coins); b.disabled = true; b.innerHTML = icon('coin', 14) + ' Coins doubled';
+        A.chime && A.chime();
+      });
+    });
+    wrap.appendChild(grid); wrap.appendChild(b);
+    return wrap;
   }
   function buzz(pattern) {
     if (!store.vibrate) return;
@@ -96,7 +155,7 @@
     var art = null, artKey = '', moonImg = null;
     function artVariant() { return !window.JadeLite && innerWidth * Math.min(window.devicePixelRatio || 1, 1.5) > 1400 ? '' : '-lite'; }
     function loadArt() {
-      var key = theme.id + artVariant();
+      var key = (theme.scene || theme.id) + artVariant();
       if (key === artKey) return;
       artKey = key;
       var names = ['sky', 'far', 'mid', 'near'], imgs = {}, left = names.length, failed = false;
@@ -107,7 +166,7 @@
           art = imgs; build();
         };
         im.onerror = function () { failed = true; };
-        im.src = 'assets/scenery/' + theme.id + '/' + n + artVariant() + '.webp';
+        im.src = 'assets/scenery/' + (theme.scene || theme.id) + '/' + n + artVariant() + '.webp';
         imgs[n] = im;
       });
       if (!moonImg) { var m = new Image(); m.onload = function () { moonImg = m; build(); }; m.src = 'assets/scenery/moon.webp'; }
@@ -269,7 +328,7 @@
     resize();
     return {
       frame: frame,
-      setTheme: function (t) { if (t.id !== theme.id) art = null; theme = t; loadArt(); build(); },
+      setTheme: function (t) { if ((t.scene || t.id) !== (theme.scene || theme.id)) art = null; theme = t; loadArt(); build(); },
       resize: resize,
       release: function (x, y) {
         if (reduced || window.JadeLite) return false;   // a still sky cannot carry a lantern away
@@ -415,13 +474,14 @@
   // The lantern hint only makes sense when the sky moves.
   function refreshSkyHint() { var h = document.querySelector('.sky-hint'); if (h) h.hidden = !!(reduced || window.JadeLite); }
   function refreshHome() {
-    refreshSkyHint();
+    refreshSkyHint(); refreshRushCard();
     var d = store.daily[dayKey()];
     var cleared = store.done ? MAX : store.level - 1;
     $('continue-label').textContent = 'Level ' + fmt(store.level);
     $('continue-eyebrow').textContent = store.done ? 'Journey complete' : 'Journey · ' + fmt(MAX) + ' levels';
-    var unlocked = THEMES.filter(function (t) { return totalStars() >= t.stars; }).length;
-    $('themes-meta').textContent = unlocked + ' of ' + THEMES.length + ' unlocked';
+    var owned = TILESETS.filter(owns).length;
+    $('themes-meta').textContent = owned + ' of ' + TILESETS.length + ' designs';
+    $('home-coins').lastChild.textContent = fmt(store.coins || 0);
     $('continue-meta').textContent = fmt(cleared) + ' cleared · ' + fmt(totalStars()) + ' ★ collected';
     $('levels-meta').textContent = fmt(cleared) + ' / ' + fmt(MAX);
     $('home-stars').textContent = '★ ' + fmt(totalStars());
@@ -483,14 +543,18 @@
     G = baseState(gen);
     Object.assign(G, cfg, {
       score: 0, combo: 0, bestCombo: 0, lastMatch: 0, usedHint: false,
-      limit: Math.round(gen.layout.n * gen.spec.secPerTile) * 1000,
+      // Only the online race runs against a clock; journey and daily boards are untimed and are lost only
+      // when no moves remain and no shuffles are left (a rewarded video can add shuffles).
+      limit: cfg.duel === 'race' ? Math.round(gen.layout.n * gen.spec.secPerTile) * 1000 : 0,
+      shufflesUsed: 0, hintsUsed: 0, revived: false,
       hints: cfg.duel === 'race' ? 1 : gen.spec.hints,
       shuffles: cfg.duel === 'race' ? 2 : gen.spec.shuffles,
       rival: { left: gen.layout.n, done: false, out: false, score: 0 }
     });
     G.timeLeft = G.limit;
+    $('clock-fill').parentNode.hidden = !G.limit;
     if (cfg.mode === 'journey') setTitle(cfg.title, 'of ' + fmt(MAX), null);
-    else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : 'Race', null);
+    else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : cfg.mode === 'rush' ? 'Rush Hour' : 'Race', null);
     var pausable = cfg.mode !== 'online';
     $('btn-quit').innerHTML = pausable ? PAUSE_ICON : '←'; $('btn-quit').setAttribute('aria-label', pausable ? 'Pause' : 'Leave race');
     G.shownScore = 0; setHeat(0); $('score').textContent = '0'; $('combo-bar').style.width = '0';
@@ -498,9 +562,10 @@
     $('rival').hidden = cfg.duel !== 'race';
     $('btn-hint').hidden = false; $('btn-shuffle').hidden = false;
     $('emotes').hidden = cfg.duel !== 'race'; $('goal').hidden = cfg.duel === 'race';
-    $('goal').textContent = gen.spec.showFree ? 'Match free tiles in pairs. Dimmed tiles are blocked.' : 'Free tiles are no longer highlighted. Look closely.';
+    $('goal').textContent = 'Match free tiles in pairs. Dimmed tiles are blocked.';
     board.accent = currentTheme().accent;
-    mountBoard(gen.spec.showFree && cfg.duel !== 'race');
+    applyBoardStyle();
+    mountBoard(true);
     updateTimedHud();
   }
 
@@ -527,6 +592,7 @@
     drawClock();
   }
   function drawClock() {
+    if (!G.limit) return;
     var frac = G.timeLeft / G.limit;
     $('clock-fill').style.width = (100 * frac) + '%';
     $('clock-text').textContent = fmtTime(G.timeLeft);
@@ -534,6 +600,7 @@
   }
 
   function tickTimed(dt) {
+    if (G.mode === 'rush' && !G.over && !G.paused && $('modal').hidden) G.elapsed = (G.elapsed || 0) + dt;
     if (G.over || G.paused || !G.limit || isTurns()) return;
     if (G.mode !== 'online' && !$('modal').hidden) return;
     var before = Math.ceil(G.timeLeft / 1000);
@@ -560,18 +627,259 @@
     if (G.left === 0) { timedWin(); return; }
     if (!M.freePairs(G.lay, G.present, G.kinds).length) {
       if (G.shuffles > 0) { toast('No moves left. Shuffle!'); $('btn-shuffle').classList.add('attention'); }
-      else timedFail('No moves left');
+      else if (G.limit) timedFail('No moves left');
+      else stuck();
     }
   }
 
+  // ------------------------------------------------------------- rewarded videos
+  /** Offer a rewarded video; resolves true when the player earned the reward. */
+  function watchAd() {
+    if (!Ads.rewardedReady || !Ads.rewardedReady()) {
+      toast('No video available right now. Try again in a moment.', 2600);
+      if (Ads.showRewarded) Ads.showRewarded();   // starts loading one
+      return Promise.resolve(false);
+    }
+    G.paused = true;
+    return Ads.showRewarded().then(function (ok) { G.paused = false; if (!ok) toast('Watch the whole video to get the reward.'); return ok; });
+  }
+  function adLabel(text) { return '\u25B6 ' + text; }
+
+  // Untimed boards: stuck with no shuffles left. A video adds two shuffles and plays one; otherwise the board is lost.
+  function stuck() {
+    if (G.over) return;
+    G.stuck = true; A.lose(); buzz([30, 60, 30]);
+    var cleared = G.lay.n - G.left, box = document.createElement('div'); box.className = 'fail-meter';
+    box.innerHTML = '<p></p><div class="fail-bar"><i></i></div><p class="revive-note">Watch a short video for 2 free shuffles and keep your progress.</p>';
+    box.firstChild.textContent = 'You cleared ' + cleared + ' of ' + G.lay.n + ' tiles.';
+    box.querySelector('i').style.width = Math.round(100 * cleared / G.lay.n) + '%';
+    var giveUp = function (then) { G.stuck = false; timedFail('No moves left', true); if (then) then(); };
+    var canRevive = G.mode !== 'rush' || (R && R.revives < 1);
+    if (!canRevive) box.querySelector('.revive-note').textContent = 'Your one revive for this run is used.';
+    else if (G.mode === 'rush') box.querySelector('.revive-note').textContent = 'Watch a short video for 2 free shuffles. One revive per Rush run.';
+    modal({
+      kind: 'fail', eyebrow: G.mode === 'daily' ? 'Daily board' : 'Level ' + fmt(G.level), title: 'No moves left', body: box,
+      back: function () { closeModal(); giveUp(); },
+      actions: [
+        { label: canRevive ? 'Give up' : 'End run', icon: 'restart', primary: !canRevive, run: function () { giveUp(); } }
+      ].concat(canRevive ? [{ label: adLabel('+2 shuffles'), primary: true, run: function () {
+          watchAd().then(function (ok) {
+            if (!ok) { stuck(); return; }
+            if (R && G.mode === 'rush') R.revives++;
+            G.stuck = false; G.revived = true; G.shuffles += 2; updateTimedHud(); useShuffle();
+          });
+        } }] : [])
+    });
+  }
+  /** Out of hints or shuffles mid-board: offer a video for more. */
+  function offerMore(what) {
+    var hint = what === 'hint', body = document.createElement('p');
+    body.className = 'revive-note';
+    body.textContent = hint ? 'Watch a short video to get 2 more hints.' : 'Watch a short video to get 2 more shuffles.';
+    G.paused = true;
+    modal({
+      kind: 'pause', eyebrow: G.mode === 'daily' ? 'Daily board' : 'Level ' + fmt(G.level || 1), title: hint ? 'Out of hints' : 'Out of shuffles', body: body,
+      back: function () { closeModal(); G.paused = false; },
+      actions: [
+        { label: 'Not now', run: function () { G.paused = false; } },
+        { label: adLabel(hint ? '+2 hints' : '+2 shuffles'), primary: true, run: function () {
+          watchAd().then(function (ok) {
+            G.paused = false;
+            if (!ok) return;
+            if (hint) G.hints += 2; else G.shuffles += 2;
+            G.revived = true; updateTimedHud();
+            toast(hint ? '+2 hints' : '+2 shuffles', 1500);
+          });
+        } }
+      ]
+    });
+  }
+
+
+  // ------------------------------------------------------------- Rush Hour
+  // A daily event from level 30: the same seven boards for everyone, cleared in a row without failing.
+  // The run's score goes on the "Rush Hour" leaderboard (shown for today), where the player sees the
+  // ~50 players ranked around them. The day turns over at 08:00 UTC, with Google Play's daily leaderboards.
+  var RUSH_FROM = 30, RUSH_N = M.RUSH_BOARDS || 7, RUSH_DONE_COINS = 150;
+  var R = null;   // the run in progress: { day, k, score, revives }
+  function rushDay() { return new Date(Date.now() - 8 * 3600e3).toISOString().slice(0, 10); }
+  function rushLeft() { var d = new Date(Date.now() - 8 * 3600e3); return 864e5 - (d.getTime() % 864e5); }
+  function fmtLeft(ms) { var m = Math.ceil(ms / 60000), h = Math.floor(m / 60); return h ? h + 'h ' + (m % 60) + 'm' : m + 'm'; }
+  function rushUnlocked() { return store.done || store.level > RUSH_FROM; }
+  function rushToday() {
+    var r = store.rush || (store.rush = { day: '', best: 0, runs: 0, bestEver: 0, cleared: 0 });
+    if (r.day !== rushDay()) { r.day = rushDay(); r.best = 0; r.runs = 0; r.cleared = 0; }
+    return r;
+  }
+  function refreshRushCard() {
+    var c = $('btn-rush'); if (!c) return;
+    var open = rushUnlocked(), r = rushToday();
+    c.classList.toggle('locked', !open);
+    $('rush-when').textContent = open ? 'ends in ' + fmtLeft(rushLeft()) : 'from level ' + RUSH_FROM;
+    $('rush-meta').textContent = !open ? 'Clear level ' + RUSH_FROM + ' to join · ' + Math.min(RUSH_FROM, store.level - 1) + ' / ' + RUSH_FROM
+      : r.best ? 'Best today ' + fmt(r.best) + (r.cleared ? ' · cleared ' + r.cleared + '×' : '') : 'Compete with 50 players at your rank';
+  }
+  function rushSteps(k, done) {
+    var d = document.createElement('div'); d.className = 'rush-steps';
+    for (var i = 0; i < RUSH_N; i++) { var t = document.createElement('i'); t.textContent = i + 1; t.className = i < done ? 'done' : i === k ? 'now' : ''; d.appendChild(t); }
+    return d;
+  }
+  /** Ranking list (async): the players around this one, or a sign-in prompt. */
+  function rankBlock(kind, span, emptyText) {
+    var wrap = document.createElement('div');
+    if (!GS.state.available) {
+      wrap.innerHTML = '<p class="rank-note"></p>';
+      wrap.firstChild.textContent = Shell.isNative ? GS.serviceName() + ' is not set up on this device yet. Your scores are kept on this phone.' : 'Leaderboards are part of the Android and iPhone apps.';
+      return wrap;
+    }
+    if (!GS.state.signedIn) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'gs-btn';
+      b.innerHTML = icon('trophy', 18) + '<span></span>'; b.lastChild.textContent = 'Sign in with ' + GS.serviceName();
+      b.addEventListener('click', function () {
+        GS.signIn(true).then(function (st) { if (st.signedIn) { toast('Signed in as ' + (st.name || 'player'), 1800); wrap.replaceWith(rankBlock(kind, span, emptyText)); } else toast('Sign-in was cancelled.'); });
+      });
+      wrap.appendChild(b);
+      var n = document.createElement('p'); n.className = 'rank-note'; n.textContent = 'Sign in to join the ranking.'; wrap.appendChild(n);
+      return wrap;
+    }
+    var note = document.createElement('p'); note.className = 'rank-note'; note.textContent = 'Loading the ranking…'; wrap.appendChild(note);
+    GS.around(kind, span).then(function (rows) {
+      if (!wrap.isConnected) return;
+      if (!rows) { note.textContent = 'The ranking could not be loaded. Check your connection.'; return; }
+      if (!rows.length) { note.textContent = emptyText; return; }
+      var ol = document.createElement('ol'); ol.className = 'rank-list';
+      rows.forEach(function (e) {
+        var li = document.createElement('li'); if (e.me) li.className = 'me';
+        li.innerHTML = '<b></b><span></span><em></em>';
+        li.children[0].textContent = '#' + fmt(e.rank); li.children[1].textContent = e.me ? e.name + ' (you)' : e.name; li.children[2].textContent = fmt(e.score);
+        ol.appendChild(li);
+      });
+      note.textContent = rows.length + ' players around your rank';
+      wrap.insertBefore(ol, note);
+      var me = ol.querySelector('.me'); if (me) ol.scrollTop = me.offsetTop - ol.clientHeight / 2;
+    });
+    return wrap;
+  }
+  function openRush() {
+    var r = rushToday(), box = document.createElement('div');
+    if (!rushUnlocked()) {
+      var cleared = Math.min(RUSH_FROM, store.level - 1);
+      box.className = 'fail-meter';
+      box.innerHTML = '<p></p><div class="fail-bar"><i></i></div><p class="revive-note"></p>';
+      box.firstChild.textContent = 'Rush Hour opens after level ' + RUSH_FROM + '. You have cleared ' + cleared + '.';
+      box.querySelector('i').style.width = Math.round(100 * cleared / RUSH_FROM) + '%';
+      box.lastChild.textContent = 'Every day, clear ' + RUSH_N + ' boards in a row without failing and climb the ranking against players at your level.';
+      modal({ kind: 'pause', eyebrow: 'Rush Hour', title: 'Locked', body: box, back: closeModal, actions: [{ label: 'Close' }, { label: 'Play on', icon: 'play', primary: true, run: function () { startLevel(store.level); } }] });
+      return;
+    }
+    var p = document.createElement('p'); p.className = 'revive-note';
+    p.textContent = 'Clear ' + RUSH_N + ' boards in a row. One fail ends the run. Faster clears and long combos score more. Finish all ' + RUSH_N + ' for ' + RUSH_DONE_COINS + ' coins.';
+    box.appendChild(p);
+    box.appendChild(resultGrid([['Best today', r.best || 0, 'score'], ['Ends in', fmtLeft(rushLeft()), 'clock']]));
+    box.appendChild(rankBlock('rush', 'day', 'No scores yet today. Be the first!'));
+    modal({ kind: 'themes', eyebrow: 'Rush Hour · ' + r.day, title: 'Today’s Rush', body: box, back: closeModal,
+      actions: [{ label: 'Close' }, { label: 'Start run', icon: 'play', primary: true, run: function () { startRush(); } }] });
+  }
+  function startRush() {
+    R = { day: rushDay(), k: 0, score: 0, revives: 0 };
+    rushBoard();
+  }
+  function rushBoard() {
+    startTimed(M.generateRush(R.day, R.k), { mode: 'rush', title: 'Board ' + (R.k + 1) + ' of ' + RUSH_N });
+    G.elapsed = 0;
+  }
+  function rushEnd(complete) {
+    var r = rushToday(), score = R.score;
+    r.runs++; if (complete) r.cleared++;
+    var best = score > r.best; if (best) r.best = score;
+    r.bestEver = Math.max(r.bestEver || 0, score);
+    save();
+    GS.submit('rush', score);
+    var boardsDone = R.k + (complete ? 1 : 0);
+    R = null;
+    return { best: best, boards: boardsDone };
+  }
+  function rushWon(stars) {
+    var speed = Math.max(0, 240 - Math.floor((G.elapsed || 0) / 1000)) * 4;
+    var gained = G.score + speed;
+    R.score += gained;
+    var coins = 10 + 2 * stars; addCoins(coins);
+    Ads.boardFinished();
+    var grid = resultGrid([['Board score', G.score, 'score'], ['Speed bonus', '+' + speed, 'clock'], ['Run score', R.score, 'bonus'], ['Coins', '+' + coins, 'coin']]);
+    if (R.k + 1 >= RUSH_N) {
+      addCoins(RUSH_DONE_COINS); confetti.burst(320);
+      var end = rushEnd(true), wrap = document.createElement('div');
+      wrap.appendChild(rushSteps(-1, RUSH_N)); wrap.appendChild(grid);
+      var msg = document.createElement('p'); msg.className = 'revive-note';
+      msg.textContent = 'All ' + RUSH_N + ' boards without a fail! +' + RUSH_DONE_COINS + ' bonus coins.' + (end.best ? ' New best today.' : '');
+      wrap.appendChild(msg);
+      modal({ kind: 'result', eyebrow: 'Rush Hour', title: 'Rush cleared!', stars: 3, body: wrap, adGate: 99, back: function () { closeModal(); show('home'); },
+        actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'Ranking', icon: 'trophy', primary: true, run: function () { show('home'); openRush(); } }] });
+      return;
+    }
+    var box = document.createElement('div'); box.appendChild(rushSteps(R.k + 1, R.k + 1)); box.appendChild(grid);
+    R.k++;
+    modal({ kind: 'result', eyebrow: 'Rush Hour', title: 'Board ' + R.k + ' of ' + RUSH_N + ' cleared', stars: stars, body: box, adGate: 99,
+      back: function () { closeModal(); rushBoard(); },
+      actions: [{ label: 'Next board', icon: 'play', primary: true, run: rushBoard }] });
+  }
+  function rushFailed(reason) {
+    var k = R.k, score = R.score, end = rushEnd(false);
+    Ads.boardFinished();
+    var box = document.createElement('div'); box.appendChild(rushSteps(k, k));
+    box.appendChild(resultGrid([['Boards cleared', k + ' / ' + RUSH_N, 'tiles'], ['Run score', score, 'score']]));
+    var p = document.createElement('p'); p.className = 'revive-note';
+    p.textContent = (end.best ? 'New best today! ' : '') + 'Your score is on today’s Rush Hour ranking.';
+    box.appendChild(p);
+    modal({ kind: 'fail', eyebrow: 'Rush Hour', title: reason === 'quit' ? 'Run ended' : 'Run over', body: box, adGate: 99, back: function () { closeModal(); show('home'); },
+      actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'New run', icon: 'restart', primary: true, run: startRush }] });
+  }
+
+  // ------------------------------------------------------------- leaderboards
+  function journeyScore() { return store.done ? MAX : store.level - 1; }
+  function openRanks() {
+    var box = document.createElement('div'), r = rushToday();
+    box.appendChild(resultGrid([['Levels cleared', journeyScore(), 'trophy'], ['Rush best today', r.best || 0, 'score']]));
+    if (GS.state.signedIn) {
+      var who = document.createElement('p'); who.className = 'rank-note';
+      who.textContent = 'Signed in to ' + GS.serviceName() + (GS.state.name ? ' as ' + GS.state.name : '') + '.';
+      box.appendChild(who);
+    }
+    box.appendChild(rankBlock('journey', 'all', 'No one is ranked yet.'));
+    var actions = [{ label: 'Close' }];
+    if (GS.state.signedIn) actions.push({ label: 'All leaderboards', icon: 'trophy', primary: true, run: function () { GS.show().then(function (ok) { if (!ok) toast('Leaderboards could not be opened.'); }); } });
+    else actions.push({ label: 'Rush Hour', icon: 'play', primary: true, run: openRush });
+    modal({ kind: 'themes', eyebrow: 'Journey ranking', title: 'Leaderboards', body: box, back: closeModal, actions: actions });
+  }
+  GS.onChange(function (st) {
+    if (st.signedIn) { GS.submit('journey', journeyScore()); var b = rushToday().best; if (b) GS.submit('rush', b); }
+  });
+
   function timedWin() {
     G.over = true; G.won = true;
-    var secs = Math.floor(G.timeLeft / 1000), bonus = secs * 5;
+    var stars, bonus, grid, coins = 0;
+    if (G.limit) {   // online race: the clock still counts
+      var secs = Math.floor(G.timeLeft / 1000), frac = G.timeLeft / G.limit;
+      bonus = secs * 5;
+      stars = frac >= 0.4 && !G.usedHint ? 3 : frac >= 0.2 ? 2 : 1;
+    } else {
+      var helps = G.hintsUsed + G.shufflesUsed;
+      stars = G.revived ? 1 : helps === 0 ? 3 : helps <= 2 ? 2 : 1;
+      bonus = stars * 150 + G.bestCombo * 25;
+    }
     G.score += bonus;
-    var frac = G.timeLeft / G.limit;
-    var stars = frac >= 0.4 && !G.usedHint ? 3 : frac >= 0.2 ? 2 : 1;
     A.win();
-    var grid = resultGrid([['Score', G.score, 'score'], ['Time left', fmtTime(G.timeLeft), 'clock'], ['Best combo', '×' + G.bestCombo, 'combo'], ['Time bonus', '+' + bonus, 'bonus']]);
+    if (G.mode === 'rush') { confetti.burst(stars === 3 ? 160 : 90); setHeat(0); buzz([20, 40, 20]); rushWon(stars); return; }
+    if (G.duel !== 'race') {
+      var firstClear = G.mode === 'journey' ? G.level === store.level : !store.daily[dayKey()];
+      coins = G.mode === 'daily' ? 40 + 5 * Math.min(10, store.streak.n || 0) : 10 + 5 * stars + Math.floor((G.level || 0) / 100);
+      if (!firstClear) coins = Math.ceil(coins / 2);
+      addCoins(coins);
+    }
+    grid = G.limit
+      ? resultGrid([['Score', G.score, 'score'], ['Time left', fmtTime(G.timeLeft), 'clock'], ['Best combo', '×' + G.bestCombo, 'combo'], ['Time bonus', '+' + bonus, 'bonus']])
+      : resultGrid([['Score', G.score, 'score'], ['Best combo', '×' + G.bestCombo, 'combo'], ['Clean bonus', '+' + bonus, 'bonus'], ['Coins', '+' + coins, 'coin']]);
+    if (coins) grid = withDoubleCoins(grid, coins);
     confetti.burst(stars === 3 ? 220 : 120); setHeat(0); buzz([20, 40, 20, 40, 60]);
     if (G.duel === 'race') {
       Net.send({ t: 'done', score: G.score });
@@ -593,7 +901,7 @@
     if (stars > (store.stars[L] || 0)) store.stars[L] = stars;
     if (newBest) store.best[L] = G.score;
     var finale = L === MAX && !store.done;
-    if (L === store.level) { if (L < MAX) store.level++; else store.done = true; }
+    if (L === store.level) { if (L < MAX) store.level++; else store.done = true; GS.submit('journey', journeyScore()); }
     save();
     if (newBest) title += ' · new best';
     Ads.boardFinished();
@@ -611,9 +919,10 @@
     modal({ kind: 'result', eyebrow: 'Level ' + fmt(L), title: title, stars: stars, body: grid, adGate: L, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Replay', icon: 'restart', run: function () { startLevel(L); } }, next] });
   }
 
-  function timedFail(reason) {
+  function timedFail(reason, quiet) {
     if (G.over) return;
-    G.over = true; A.lose();
+    G.over = true; if (!quiet) A.lose();
+    if (G.mode === 'rush') { setHeat(0); rushFailed(reason); return; }
     if (G.duel === 'race') {
       Net.send({ t: 'out', left: G.left, score: G.score });
       if (G.rival.out) resolveRace();
@@ -647,7 +956,7 @@
 
   function useHint() {
     if (G.over || isTurns()) return;
-    if (G.hints <= 0) { toast('No hints left on this board.'); return; }
+    if (G.hints <= 0) { if (G.limit || G.mode === 'rush') toast('No hints left on this board.'); else offerMore('hint'); return; }
     var pairs = M.freePairs(G.lay, G.present, G.kinds);
     if (!pairs.length) { toast('No moves left. Shuffle!'); return; }
     var pick = null, sol = G.gen.solution;
@@ -656,23 +965,22 @@
       if (G.present[a] && G.present[b] && G.kinds[a] === G.kinds[b] && M.isFree(G.lay, G.present, a) && M.isFree(G.lay, G.present, b)) pick = [a, b];
     }
     pick = pick || pairs[0];
-    G.hints--; G.usedHint = true;
-    G.timeLeft = Math.max(1000, G.timeLeft - HINT_COST_MS);
+    G.hints--; G.usedHint = true; G.hintsUsed++;
     board.showHint(pick, 3500);
-    toast('Hint used: −10 seconds', 1500);
+    if (G.limit) { G.timeLeft = Math.max(1000, G.timeLeft - HINT_COST_MS); toast('Hint used: −10 seconds', 1500); }
     updateTimedHud();
   }
 
   function useShuffle() {
     if (G.over || isTurns()) return;
-    if (G.shuffles <= 0) { toast('No shuffles left on this board.'); return; }
+    if (G.shuffles <= 0) { if (G.limit || G.mode === 'rush') toast('No shuffles left on this board.'); else offerMore('shuffle'); return; }
     var next = M.reshuffle(G.lay, G.present, G.kinds, Math.random);
-    if (!next) { timedFail('No moves left'); return; }
+    if (!next) { if (G.limit) timedFail('No moves left'); else stuck(); return; }
     var old = G.kinds;
     G.kinds = next; board.kinds = next; G.sel = -1; board.sel = -1; board.hint = []; board.partners = [];
     board.flipFrom(old); buzz([8, 30, 8, 30, 8]);
     G.gen = Object.assign({}, G.gen, { solution: [] });
-    G.shuffles--; A.shuffle(); board.invalidate();
+    G.shuffles--; G.shufflesUsed++; A.shuffle(); board.invalidate();
     $('btn-shuffle').classList.remove('attention');
     updateTimedHud();
   }
@@ -812,6 +1120,7 @@
 
   function leaveGame() {
     if (G.mode === 'online') Net.close();
+    if (G.mode === 'rush' && R) rushEnd(false);   // leaving mid-run still counts the score so far
     G = { mode: null };
     show('home');
   }
@@ -1079,7 +1388,7 @@
   }
 
   // ------------------------------------------------------------- pause & settings
-  function canPause() { return !$('game').hidden && G.lay && !G.over && (G.mode === 'journey' || G.mode === 'daily' || G.mode === 'local' || G.mode === 'ai'); }
+  function canPause() { return !$('game').hidden && G.lay && !G.over && (G.mode === 'journey' || G.mode === 'daily' || G.mode === 'rush' || G.mode === 'local' || G.mode === 'ai'); }
   function pauseGame() {
     if (!canPause() || !$('modal').hidden) return;
     var turnLeft = isTurns() ? G.turnEnd - performance.now() : 0;
@@ -1088,20 +1397,22 @@
     var restart = function () {
       G.paused = false;
       if (G.mode === 'journey') startLevel(G.level); else if (G.mode === 'daily') startDaily();
+      else if (G.mode === 'rush') rushBoard();
       else startTurns({ mode: G.mode, size: G.size, aiLevel: G.aiLevel, me: G.me, first: G.first, seed: Math.floor(Math.random() * 1e9) });
     };
     var info = document.createElement('div'); info.className = 'pause-info';
-    if (!isTurns()) info.appendChild(resultGrid([['Time left', fmtTime(G.timeLeft), 'clock'], ['Tiles left', G.left, 'tiles']]));
+    if (!isTurns()) info.appendChild(G.limit ? resultGrid([['Time left', fmtTime(G.timeLeft), 'clock'], ['Tiles left', G.left, 'tiles']])
+      : resultGrid([['Score', G.score, 'score'], ['Tiles left', G.left, 'tiles']]));
     else info.appendChild(resultGrid([[G.names[0], G.scores[0] + ' pts', 'user'], [G.names[1], G.scores[1] + ' pts', 'user']]));
     modal({
       kind: 'pause', eyebrow: $('game-title').lastChild.textContent, title: 'Paused', body: info, back: function () { closeModal(); resume(); },
       actions: [
         { label: 'Resume', icon: 'play', primary: true, cls: 'resume-btn', run: resume },
-        { label: 'Quit', icon: 'home', cls: 'pause-opt', run: function () { G.paused = false; leaveGame(); } },
-        { label: 'Restart', icon: 'restart', cls: 'pause-opt', run: restart },
+        { label: G.mode === 'rush' ? 'End run' : 'Quit', icon: 'home', cls: 'pause-opt', run: function () { G.paused = false; if (G.mode === 'rush') timedFail('quit', true); else leaveGame(); } },
+      ].concat(G.mode === 'rush' ? [] : [{ label: 'Restart', icon: 'restart', cls: 'pause-opt', run: restart }]).concat([
         // stays paused while Settings is open; coming back re-opens this menu with the same turn time
         { label: 'Settings', icon: 'gear', cls: 'pause-opt', run: function () { openSettings(function () { resume(); pauseGame(); }); } }
-      ]
+      ])
     });
   }
 
@@ -1133,7 +1444,7 @@
       store.lite = v; window.JadeLite = v; save(); refreshSkyHint(); board.resize(); demo.resize(); sky.resize();
     }, 'leaf'));
     group('More');
-    box.appendChild(linkRow('Tile sets', function () { closeModal(); openThemes(done); }, 'palette'));
+    box.appendChild(linkRow('Shop: tile sets and boards', function () { closeModal(); openThemes(done); }, 'palette'));
     box.appendChild(linkRow('How to play', function () { closeModal(); howTo(done); }, 'help'));
     box.appendChild(linkRow('Privacy policy', function () { window.open(PRIVACY_URL, '_blank'); }, 'shield'));
     if (Ads.hasPrivacyOptions()) box.appendChild(linkRow('Ad privacy choices', function () { Ads.showPrivacyOptions(); }, 'ad'));
@@ -1158,34 +1469,129 @@
       pb.drawTile(g, { x: x0 + k * (pb.fw + 4), y: 2 + (k === 1 ? 0 : pb.dz * 0.6), w: pb.fw, h: pb.fh }, kind, { variant: k });
     });
   }
-  function openThemes(after) {
+  // ------------------------------------------------------------- shop
+  // Tile sets and table designs. Classic woods unlock with stars; everything else costs coins (won by clearing
+  // boards) or can be unlocked by watching a few short videos.
+  var SHOP_GROUPS = [['classic', 'Classic'], ['woods', 'Woods'], ['marble', 'Marble'], ['ivory', 'Ivory'], ['bamboo', 'Bamboo'],
+    ['jadestone', 'Jade'], ['rosequartz', 'Rose'], ['lapis', 'Lapis'], ['gold', 'Gold'], ['obsidianglass', 'Obsidian']];
+  var shopState = { tab: 'tiles', group: 'classic' };
+  function openThemes(after) { openShop(after); }
+  function openShop(after, keep) {
     if (typeof after !== 'function') after = null;
-    var stars = totalStars(), cur = currentTheme(), box = document.createElement('div');
-    box.style.display = 'grid'; box.style.gap = '12px';
-    var p = document.createElement('p'); p.className = 'themes-intro'; p.textContent = 'Six woods, each with its own table and night sky. Earn stars to unlock them.';
-    var grid = document.createElement('div'); grid.className = 'themes';
-    THEMES.forEach(function (t) {
-      var locked = stars < t.stars, b = document.createElement('button');
-      b.className = 'theme-card'; b.type = 'button'; b.disabled = locked;
-      b.setAttribute('aria-pressed', String(t.id === cur.id));
-      b.innerHTML = '<canvas></canvas><b></b><small></small>' + (locked ? '<span class="unlock"><i></i></span>' : '');
-      b.style.setProperty('--wood', t.face[0]); b.style.setProperty('--wood2', t.body[1]);
-      b.style.setProperty('--scene', 'url("' + new URL('assets/scenery/' + t.id + '/thumb.webp', location.href).href + '")');
-      b.querySelector('b').textContent = t.name;
-      b.querySelector('small').innerHTML = locked ? icon('lock', 13) + ' ' + fmt(stars) + ' / ' + t.stars + ' ★' : t.id === cur.id ? '✓ In use' : 'Tap to use';
-      if (locked) b.querySelector('.unlock i').style.width = Math.round(100 * stars / t.stars) + '%';
-      b.addEventListener('click', function () { store.theme = t.id; save(); applyTheme(); A.select(); openThemes(after); });
-      grid.appendChild(b);
+    if (!keep) shopState.after = after; else after = shopState.after;
+    var stars = totalStars(), cur = currentTheme(), curBoard = currentBoard();
+    var box = document.createElement('div'); box.className = 'shop';
+    var head = document.createElement('div'); head.className = 'shop-head';
+    head.innerHTML = '<span class="coin-pill big">' + coinText(store.coins || 0) + '</span>';
+    var free = document.createElement('button'); free.type = 'button'; free.className = 'ad-btn small';
+    var today = dayKey(), fc = store.freeCoins && store.freeCoins.day === today ? store.freeCoins.n : 0;
+    free.innerHTML = '▶ +' + FREE_COINS + ' coins <em>' + (FREE_COINS_PER_DAY - fc) + ' left today</em>';
+    free.disabled = fc >= FREE_COINS_PER_DAY;
+    free.addEventListener('click', function () {
+      watchAd().then(function (ok) {
+        if (!ok) return;
+        store.freeCoins = { day: today, n: fc + 1 }; addCoins(FREE_COINS); toast('+' + FREE_COINS + ' coins', 1500); openShop(null, true);
+      });
     });
-    box.appendChild(p); box.appendChild(grid);
+    head.appendChild(free); box.appendChild(head);
+    var tabs = document.createElement('div'); tabs.className = 'seg shop-tabs';
+    [['tiles', 'Tile sets'], ['boards', 'Boards']].forEach(function (t) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = t[1];
+      b.setAttribute('aria-pressed', String(shopState.tab === t[0]));
+      b.addEventListener('click', function () { shopState.tab = t[0]; openShop(null, true); });
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
+    var grid = document.createElement('div'); grid.className = 'themes';
+    var previews = [];
+    if (shopState.tab === 'tiles') {
+      var chips = document.createElement('div'); chips.className = 'shop-groups';
+      SHOP_GROUPS.forEach(function (g) {
+        var c = document.createElement('button'); c.type = 'button'; c.className = 'chip'; c.textContent = g[1];
+        c.setAttribute('aria-checked', String(shopState.group === g[0]));
+        c.addEventListener('click', function () { shopState.group = g[0]; openShop(null, true); });
+        chips.appendChild(c);
+      });
+      box.appendChild(chips);
+      var list = TILESETS.filter(function (t) { return t.group === shopState.group; });
+      window.TileBoard.preloadWood(list);
+      list.forEach(function (t) {
+        var have = owns(t), b = document.createElement('button');
+        b.className = 'theme-card' + (have ? '' : ' locked'); b.type = 'button';
+        b.setAttribute('aria-pressed', String(t.id === cur.id));
+        b.innerHTML = '<canvas></canvas><b></b><small></small>' + (t.group === 'classic' && !have ? '<span class="unlock"><i></i></span>' : '');
+        b.style.setProperty('--wood', t.face[0]); b.style.setProperty('--wood2', t.body[1]);
+        b.style.setProperty('--scene', 'url("' + new URL('assets/scenery/' + t.scene + '/thumb.webp', location.href).href + '")');
+        b.querySelector('b').textContent = t.name;
+        var tag = t.id === cur.id ? '✓ In use' : have ? 'Tap to use' : t.group === 'classic' ? icon('lock', 13) + ' ' + fmt(stars) + ' / ' + t.stars + ' ★' : coinText(t.price);
+        b.querySelector('small').innerHTML = tag;
+        if (t.group === 'classic' && !have) b.querySelector('.unlock i').style.width = Math.round(100 * stars / t.stars) + '%';
+        b.addEventListener('click', function () {
+          if (have) { store.theme = t.id; save(); applyTheme(); A.select(); openShop(null, true); return; }
+          if (t.group === 'classic') { toast('Collect ' + fmt(t.stars) + ' ★ to unlock ' + t.name + '.'); return; }
+          buySheet({ key: t.id, name: t.name, price: t.price, theme: t, use: function () { store.theme = t.id; applyTheme(); } });
+        });
+        grid.appendChild(b); previews.push([b.querySelector('canvas'), t]);
+      });
+    } else {
+      BOARDS.forEach(function (bd) {
+        var have = ownsBoard(bd), b = document.createElement('button');
+        b.className = 'theme-card board-card' + (have ? '' : ' locked'); b.type = 'button';
+        b.setAttribute('aria-pressed', String(bd.id === curBoard.id));
+        b.innerHTML = '<span class="mini-tray"><canvas></canvas></span><b></b><small></small>';
+        styleTray(b.querySelector('.mini-tray'), bd);
+        b.querySelector('b').textContent = bd.name;
+        b.querySelector('small').innerHTML = bd.id === curBoard.id ? '✓ In use' : have ? 'Tap to use' : coinText(bd.price);
+        b.addEventListener('click', function () {
+          if (have) { store.board = bd.id; save(); applyBoardStyle(); A.select(); openShop(null, true); return; }
+          buySheet({ key: 'board:' + bd.id, name: bd.name, price: bd.price, board: bd, use: function () { store.board = bd.id; applyBoardStyle(); } });
+        });
+        grid.appendChild(b); previews.push([b.querySelector('canvas'), cur]);
+      });
+    }
+    box.appendChild(grid);
     var finish = function () { refreshHome(); if (after) after(); };
-    modal({ kind: 'themes', eyebrow: '★ ' + fmt(stars) + ' collected', title: 'Tile sets', body: box, back: function () { closeModal(); finish(); }, actions: [{ label: 'Done', primary: true, run: finish }] });
-    // One preview per frame, each drawn once and then copied from a cache, so opening (or re-opening after
-    // switching sets) never blocks the app for long on slow phones.
-    var cvs = grid.querySelectorAll('canvas'), k = 0, tries = 0;
+    modal({ kind: 'themes', eyebrow: '★ ' + fmt(stars) + ' · ' + fmt(store.coins || 0) + ' coins', title: 'Shop', body: box, back: function () { closeModal(); finish(); }, actions: [{ label: 'Done', primary: true, run: finish }] });
+    drawPreviews(previews);
+  }
+  // A design not owned yet: buy it with coins, or watch videos (progress is kept between visits).
+  function buySheet(item) {
+    var need = adsFor(item.price), done = (store.adProgress || {})[item.key] || 0, coins = store.coins || 0;
+    var body = document.createElement('div'); body.className = 'buy-sheet';
+    if (item.theme) { body.innerHTML = '<canvas class="buy-preview"></canvas>'; }
+    else { body.innerHTML = '<span class="mini-tray big"><canvas></canvas></span>'; styleTray(body.querySelector('.mini-tray'), item.board); }
+    var p = document.createElement('p'); p.className = 'revive-note';
+    p.innerHTML = 'Buy for ' + coinText(item.price) + ' or watch ' + need + ' short video' + (need > 1 ? 's' : '') + ' (' + done + ' / ' + need + ' watched).';
+    body.appendChild(p);
+    var unlock = function () {
+      store.owned = (store.owned || []).concat([item.key]); store.adProgress = store.adProgress || {}; delete store.adProgress[item.key];
+      item.use(); save(); A.win(); confetti.burst(90); toast(item.name + ' unlocked!', 1800); openShop(null, true);
+    };
+    modal({
+      kind: 'themes', eyebrow: 'Shop', title: item.name, body: body, back: function () { closeModal(); openShop(null, true); },
+      actions: [
+        { label: coins >= item.price ? 'Buy · ' + fmt(item.price) : 'Need ' + fmt(item.price - coins) + ' more', run: function () {
+          if ((store.coins || 0) < item.price) { toast('Win more boards to earn coins, or watch videos.'); buySheet(item); return; }
+          addCoins(-item.price); unlock();
+        } },
+        { label: '▶ Watch (' + done + '/' + need + ')', primary: true, run: function () {
+          watchAd().then(function (ok) {
+            if (!ok) { buySheet(item); return; }
+            store.adProgress = store.adProgress || {}; store.adProgress[item.key] = done + 1; save();
+            if (done + 1 >= need) unlock(); else buySheet(item);
+          });
+        } }
+      ]
+    });
+    drawPreviews([[body.querySelector('canvas'), item.theme || currentTheme()]]);
+  }
+  // One preview per frame, each drawn once and then copied from a cache, so opening (or re-opening after
+  // switching sets) never blocks the app for long on slow phones.
+  function drawPreviews(items) {
+    var k = 0, tries = 0;
     (function nextPreview() {
-      if (k >= cvs.length || !cvs[k].isConnected) return;
-      var c = cvs[k], t = THEMES[k], r = c.getBoundingClientRect(), key = t.id + ':' + Math.round(r.width) + 'x' + Math.round(r.height) + (window.TileBoard.woodReady(t.id) ? ':w' : '');
+      if (k >= items.length || !items[k][0] || !items[k][0].isConnected) return;
+      var c = items[k][0], t = items[k][1], r = c.getBoundingClientRect(), key = t.id + ':' + Math.round(r.width) + 'x' + Math.round(r.height) + (window.TileBoard.woodReady(t.wood || t.id) ? ':w' : '');
       // Not laid out yet (sheet still animating in): try again next frame, but never draw from an empty canvas,
       // which WebKit rejects with InvalidStateError.
       if (r.width < 4 || r.height < 4) { if (++tries < 60) requestAnimationFrame(nextPreview); return; }
@@ -1193,7 +1599,7 @@
         if (!previewCache[key]) { var off = document.createElement('canvas'); off.style.width = r.width + 'px'; off.style.height = r.height + 'px'; drawPreview(off, t, r); if (off.width && off.height) previewCache[key] = off; }
         var src = previewCache[key];
         if (src) { c.width = src.width; c.height = src.height; c.getContext('2d').drawImage(src, 0, 0); }
-      } catch (e) { /* a preview is decoration; never let it break the picker */ }
+      } catch (e) { /* a preview is decoration; never let it break the shop */ }
       k++; requestAnimationFrame(nextPreview);
     })();
   }
@@ -1206,12 +1612,14 @@
     var cards = [
       ['Match the pairs', 'Tap two identical tiles to clear them. Clear the whole board to win.',
         '<div class="art art-match">' + t('東', 'red pick') + '<i class="art-plus">+</i>' + t('東', 'red pick') + '<i class="art-burst"></i></div>'],
-      ['Only free tiles', 'A tile is free when nothing sits on it and its left or right side is open. Blocked tiles look dimmed early on.',
+      ['Only free tiles', 'A tile is free when nothing sits on it and its left or right side is open. Blocked tiles are dimmed.',
         '<div class="art art-free"><div class="art-row">' + t('中', 'red ok') + t('發', 'green no') + t('北', 'ok') + '</div><div class="art-top">' + t('西', 'ok') + '</div></div>'],
       ['Chain combos', 'Make your next match within 5 seconds to grow the multiplier, up to ×12.',
         '<div class="art art-combo"><b>×2</b><b>×5</b><b>×9</b><b class="hot">×12</b></div>'],
-      ['Beat the clock', 'Clear the board before the fuse burns out. Hints cost 10 seconds and shuffles are limited.',
-        '<div class="art art-clock"><div class="art-fuse"><i></i></div><div class="art-chips"><span>? Hint −10s</span><span>⇄ Shuffle</span></div></div>'],
+      ['Don\'t get stuck', 'No clock: take your time. If no pair is free, shuffle. Out of shuffles? Watch a short video for two more, or the board is lost.',
+        '<div class="art art-clock"><div class="art-chips"><span>? Hint</span><span>⇄ Shuffle</span><span>▶ +2</span></div></div>'],
+      ['Earn coins', 'Every cleared board pays coins. Spend them in the Shop on new tile sets and table designs.',
+        '<div class="art art-combo"><b>+15</b><b>+25</b><b class="hot">+50</b></div>'],
       ['Duel your friends', 'Race on the same board, or take turns on one board: 15 seconds a turn, winds and dragons score 2.',
         '<div class="art art-duel"><span class="p p0">You</span><i>VS</i><span class="p p1">Rival</span></div>']
     ];
@@ -1291,6 +1699,9 @@
   });
   $('board').addEventListener('pointerleave', function () { board.setHover(-1); });
   $('btn-themes').addEventListener('click', function () { openThemes(); });
+  $('btn-rush').addEventListener('click', openRush);
+  $('btn-ranks').addEventListener('click', openRanks);
+  setInterval(function () { if (!$('home').hidden) refreshRushCard(); }, 30000);
   document.addEventListener('pointerdown', function (e) {
     // A tap on the open sky behind the home screen lets a lantern go.
     if (e.target === $('bg') && !$('home').hidden) { A.unlock(); if (sky.release(e.clientX, e.clientY) !== false) { A.chime(); buzz(8); } return; }
@@ -1373,7 +1784,7 @@
   var last = performance.now(), lastScene = 0;
   // Menus play the menu theme; a board plays its world's two pieces in turn; duels get the drums.
   function musicScene() {
-    var t = currentTheme().id, inGame = !$('game').hidden && G.lay;
+    var t = currentTheme().scene || currentTheme().id, inGame = !$('game').hidden && G.lay;
     return { music: !inGame ? 'menu' : (G.mode === 'journey' || G.mode === 'daily') && G.duel !== 'race' && !isTurns() ? t : 'duel', ambience: t };
   }
   function loop(now) {

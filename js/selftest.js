@@ -32,6 +32,8 @@
       check(document.fonts.check('700 20px "Noto Serif SC"', '中'), 'Bundled tile font loaded');
       check(!!global.Capacitor.isPluginAvailable('Haptics'), 'Haptics plugin available');
       check(!!global.Capacitor.isPluginAvailable('AdMob'), 'AdMob plugin available');
+      var gs = await global.Capacitor.registerPlugin('GameServices').leaderboards().then(function (r) { return !!r; }, function () { return false; });
+      check(gs, 'Game Center plugin answers');
       check(!global.Capacitor.isPluginAvailable('FacebookLogin') && $('btn-lobby-friends').hidden, 'Facebook excluded on iOS, Friends entry hidden');
       var top = getComputedStyle(document.documentElement).getPropertyValue('--sa-top');
       check(true, 'Safe area: ' + (top || 'n/a'));
@@ -54,8 +56,7 @@
     await step('pause', async function () {
       document.querySelector('#modal-actions .primary').click(); await until(boardReady, 15000); await sleep(800);
       $('btn-quit').click(); await sleep(600);
-      var t1 = global.JadeRush.state().timeLeft; await sleep(2000);
-      check(Math.abs(global.JadeRush.state().timeLeft - t1) < 50, 'Pause stops the clock');
+      check(global.JadeRush.state().limit === 0 && $('clock-fill').parentNode.hidden, 'Journey boards are untimed (no clock)');
       check(clickText('Quit'), 'Quit from pause'); await sleep(800);
       check(!$('home').hidden, 'Back on the home screen');
     });
@@ -79,7 +80,9 @@
     await step('tile sets', async function () {
       $('btn-themes').click(); await sleep(900);
       console.log('SELFTEST SHOT tilesets');
-      check(document.querySelectorAll('.theme-card').length === 6, 'Tile set picker shows 6 sets');
+      check(document.querySelectorAll('.theme-card').length === 6, 'Shop shows the 6 classic tile sets');
+      document.querySelector('.shop-tabs button:last-child').click(); await sleep(900);
+      check(document.querySelectorAll('.board-card').length >= 12, 'Shop lists the board designs');
       document.querySelector('#modal-actions .primary').click();
     });
     console.log('SELFTEST DONE pass=' + pass + ' fail=' + fail);

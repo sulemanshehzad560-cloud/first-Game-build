@@ -170,7 +170,7 @@
   function levelSpec(L) {
     var tail = L <= 42 ? 0 : Math.log(L / 42) / Math.log(MAX_LEVEL / 42);   // 0 at level 42, 1 at 5000
     return {
-      cols: Math.min(8, 4 + Math.floor((L + 1) / 3)),
+      cols: Math.min(7, 4 + Math.floor((L + 1) / 3)),   // at most 7 columns keeps tiles large on phones
       rows: Math.min(9, 4 + Math.floor(L / 2.5)),
       layers: Math.min(5, 2 + Math.floor(L / 5)),
       target: Math.min(144, 24 + L * 4),
@@ -178,8 +178,8 @@
       stack: L < 6 ? 0.6 : Math.min(0.95, 0.85 + tail * 0.1),
       secPerTile: L <= 42 ? Math.max(1.5, 3.6 - L * 0.05) : +(1.5 - tail * 0.35).toFixed(3),
       shuffles: L < 8 ? 3 : L < 20 ? 2 : 1,
-      hints: L < 8 ? 3 : L < 20 ? 2 : L < 2500 ? 1 : 0,
-      showFree: L <= 12
+      hints: L < 8 ? 3 : L < 20 ? 2 : 1,
+      showFree: true   // blocked tiles stay dimmed on every level
     };
   }
 
@@ -226,6 +226,11 @@
   function generateDaily(dateStr) {
     var r = mulberry32(hash('jade-daily', dateStr));
     return generate(levelSpec(22 + Math.floor(r() * 20)), 'jade-daily-' + dateStr);
+  }
+  // Rush Hour: the same seven boards for every player on a given day, each a little harder than the last.
+  var RUSH_LEVELS = [30, 38, 46, 55, 64, 74, 85];
+  function generateRush(dateStr, k) {
+    return generate(levelSpec(RUSH_LEVELS[Math.min(k, RUSH_LEVELS.length - 1)]), 'jade-rush-' + dateStr + '-' + k);
   }
   function generateDuel(seed, size) {
     var L = size === 'big' ? 26 : 12;
@@ -275,7 +280,7 @@
   var api = {
     KINDS: KINDS, Layout: Layout, isFree: isFree, freeTiles: freeTiles, freePairs: freePairs,
     deal: deal, levelSpec: levelSpec, MAX_LEVEL: MAX_LEVEL, generate: generate, generateLevel: generateLevel,
-    generateDaily: generateDaily, generateDuel: generateDuel, reshuffle: reshuffle,
+    generateDaily: generateDaily, generateRush: generateRush, RUSH_BOARDS: RUSH_LEVELS.length, generateDuel: generateDuel, reshuffle: reshuffle,
     points: points, aiPick: aiPick, mulberry32: mulberry32, hash: hash
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

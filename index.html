@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Jade Rush</title>
-<meta name="description" content="Jade Rush is a Mahjong tile-matching game with 5,000 levels, a clock to beat, and two-player online duels.">
+<meta name="description" content="Jade Rush is a Mahjong tile-matching game with 5,000 relaxing levels, a coin shop of tile and table designs, leaderboards and two-player online duels.">
 <meta name="theme-color" content="#06121a">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="fonts/fonts.css">
@@ -19,9 +19,11 @@
     <header class="home-top">
       <div class="home-pills">
         <span class="star-pill" id="home-stars" aria-label="Stars collected">★ 0</span>
+        <span class="star-pill coin-pill" id="home-coins" aria-label="Coins"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.6"/></svg><span>0</span></span>
         <span class="star-pill streak-pill" id="home-streak" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 21c-3.6 0-6-2.4-6-5.7 0-3.4 3-5.1 3.6-8.8 2.5 1.2 3.4 3.4 3.4 5 .9-.6 1.6-1.6 1.8-3 1.9 1.4 3.2 3.9 3.2 6.8 0 3.3-2.4 5.7-6 5.7z"/></svg><span></span></span>
       </div>
       <div class="home-top-actions">
+        <button id="btn-ranks" class="round-btn" aria-label="Leaderboards"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5v1.5A3 3 0 0 0 8 10.4M16 6h3v1.5a3 3 0 0 1-3 2.9M12 13v4M8.5 20h7M10 17h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button id="btn-howto" class="round-btn" aria-label="How to play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 9a3 3 0 1 1 4.3 2.7c-.9.4-1.5 1.2-1.5 2.2v.6M12 18h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
         <button id="btn-settings" class="round-btn" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
       </div>
@@ -30,7 +32,7 @@
     <div class="brand">
       <div class="demo-tray"><canvas id="demo" aria-label="Tiles being matched on a small demo board"></canvas></div>
       <h1 class="logo"><span class="logo-jade">Jade</span><span class="logo-rush">Rush</span><i class="seal" aria-hidden="true">中</i></h1>
-      <p class="tagline">Match the tiles · beat the clock</p>
+      <p class="tagline">Match the tiles · climb the leaderboard</p>
     </div>
 
     <nav class="menu">
@@ -58,10 +60,20 @@
         </button>
         <button id="btn-themes" class="qtile q-green">
           <span class="qface" aria-hidden="true"><b>發</b></span>
-          <span class="tile-title">Tile sets</span>
-          <span class="tile-meta" id="themes-meta">1 of 6 unlocked</span>
+          <span class="tile-title">Shop</span>
+          <span class="tile-meta" id="themes-meta">Tile sets &amp; boards</span>
         </button>
       </div>
+
+      <button id="btn-rush" class="rush-card">
+        <span class="rush-bolt" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13.5 2 5 13.5h6L9.5 22 19 9.5h-6.2L13.5 2Z" fill="currentColor"/></svg></span>
+        <span class="rush-text">
+          <span class="rush-eyebrow">Rush Hour · <span id="rush-when">today</span></span>
+          <span class="rush-title">7 boards, no fails</span>
+          <span class="rush-meta" id="rush-meta">Unlocks at level 30</span>
+        </span>
+        <span class="rush-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </button>
 
       <section class="duel-card" aria-labelledby="duel-h">
         <h2 class="duel-h" id="duel-h"><span>Duel</span><small>2 players</small></h2>
@@ -219,6 +231,7 @@
 <script src="js/net.js" defer></script>
 <script src="js/native.js" defer></script>
 <script src="js/ads.js" defer></script>
+<script src="js/games.js" defer></script>
 <script src="js/social.js" defer></script>
 <script src="js/main.js" defer></script>
 <script src="js/selftest.js" defer></script>

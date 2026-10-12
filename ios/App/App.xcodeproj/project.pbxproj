@@ -299,6 +299,7 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -308,8 +309,8 @@
 					"@executable_path/Frameworks",
 				);
 				ADMOB_IOS_APP_ID = "ca-app-pub-4940350948200557~7108831181";
-				ADMOB_IOS_INTERSTITIAL_ID = "ca-app-pub-4940350948200557/3701078370";
-				MARKETING_VERSION = 1.0.0;
+				ADMOB_IOS_INTERSTITIAL_ID = "ca-app-pub-4940350948200557/9897482338";
+				MARKETING_VERSION = 1.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.jaderush.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -323,6 +324,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -332,8 +334,8 @@
 					"@executable_path/Frameworks",
 				);
 				ADMOB_IOS_APP_ID = "ca-app-pub-4940350948200557~7108831181";
-				ADMOB_IOS_INTERSTITIAL_ID = "ca-app-pub-4940350948200557/3701078370";
-				MARKETING_VERSION = 1.0.0;
+				ADMOB_IOS_INTERSTITIAL_ID = "ca-app-pub-4940350948200557/9897482338";
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jaderush.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";

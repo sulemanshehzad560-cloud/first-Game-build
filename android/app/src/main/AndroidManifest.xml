@@ -34,6 +34,9 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4940350948200557~7159308786" />
 
+        <!-- Google Play Games Services project ID (from build.gradle; 0 when not configured) -->
+        <meta-data android:name="com.google.android.gms.games.APP_ID" android:value="@string/game_services_project_id" />
+
         <!-- Facebook Login (values come from build.gradle resValues) -->
         <meta-data android:name="com.facebook.sdk.ApplicationId" android:value="@string/facebook_app_id" />
         <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />
