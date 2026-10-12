@@ -256,6 +256,13 @@ jobs:
           for f in build/JadeRush.xcarchive/Products/Applications/App.app/Frameworks/*.framework; do
             codesign --remove-signature "$f" 2>/dev/null || true; rm -rf "$f/_CodeSignature"
           done
+          # The archive is unsigned, so it carries no entitlements and the export would sign without Game Center.
+          # Give the app binary an ad-hoc signature holding App.entitlements (frameworks set aside meanwhile, as
+          # they are unsigned now); the export keeps those entitlements when it signs for the App Store.
+          APP=build/JadeRush.xcarchive/Products/Applications/App.app
+          mv "$APP/Frameworks" build/frameworks-hold
+          codesign --force --sign - --entitlements ios/App/App/App.entitlements --generate-entitlement-der "$APP"
+          mv build/frameworks-hold "$APP/Frameworks"
           sed "s/TEAM_ID_PLACEHOLDER/$APPLE_TEAM_ID/" ci/ios-export.plist > build/export.plist
           xcodebuild -exportArchive -archivePath build/JadeRush.xcarchive -exportPath build/ipa -exportOptionsPlist build/export.plist "${AUTH[@]}" 2>&1 | tail -20
           mkdir -p ios-out && cp build/ipa/*.ipa "ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
@@ -265,7 +272,8 @@ jobs:
             echo "$(basename "$f"): $(codesign -dv "$f" 2>&1 | grep -E '^Authority=' | head -1)"
           done
           codesign --verify --deep --strict --verbose=2 build/check/Payload/App.app
-          echo "Entitlements:"; codesign -d --entitlements - --xml build/check/Payload/App.app 2>/dev/null | plutil -p - || true
+          echo "Entitlements:"; codesign -d --entitlements - --xml build/check/Payload/App.app 2>/dev/null | plutil -p - | tee build/ents.txt || true
+          grep -q game-center build/ents.txt && echo "PASS Game Center entitlement present" | tee -a ios-out/report.txt || echo "WARN Game Center entitlement missing" | tee -a ios-out/report.txt
           IPA="ios-out/jade-rush-${VERSION_NAME}-${CODE}.ipa"
           if [ "$UPLOAD" != "true" ]; then
             echo "PASS signed App Store build ${CODE} ready (not uploaded; run the workflow manually with upload_ios to send it)" | tee -a ios-out/report.txt
