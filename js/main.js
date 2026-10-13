@@ -14,7 +14,7 @@
   var SAVE_KEY = 'jaderush.v1';
   var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true, done: false, music: true, ambience: true,
     coins: 150, owned: [], board: 'table', adProgress: {}, freeCoins: { day: '', n: 0 },
-    rush: { day: '', best: 0, runs: 0, bestEver: 0, cleared: 0 } };
+    race: null, rushWins: 0, rushBest: 0, rushCount: 0, rushNext: 0 };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
   function totalStars() { var s = 0; for (var k in store.stars) s += store.stars[k]; return s; }
@@ -396,10 +396,18 @@
   }
 
   // ------------------------------------------------------------- ui helpers
-  var screens = ['home', 'levels', 'lobby', 'friends', 'game'];
+  var screens = ['home', 'levels', 'lobby', 'friends', 'game', 'shop', 'rush', 'ranks'];
+  var TAB_SCREENS = { home: 1, levels: 1, shop: 1, rush: 1, ranks: 1 };
   function show(id) {
     screens.forEach(function (s) { $(s).hidden = s !== id; });
+    var tabs = !!TAB_SCREENS[id];
+    $('tabbar').hidden = !tabs; document.body.classList.toggle('tabs-on', tabs);
+    document.querySelectorAll('#tabbar [data-tab]').forEach(function (b) { if (b.dataset.tab === id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
     if (id === 'home') refreshHome();
+    if (id === 'shop') renderShop();
+    if (id === 'rush') { renderRush(); countUp($('rush-body')); }
+    if (id === 'ranks') { renderRanks(); countUp($('ranks-body')); }
+    if (id === 'levels') renderLevelGrid();
     if (id === 'game') board.resize();
   }
   function toast(msg, ms) {
@@ -553,8 +561,9 @@
     });
     G.timeLeft = G.limit;
     $('clock-fill').parentNode.hidden = !G.limit;
-    if (cfg.mode === 'journey') setTitle(cfg.title, 'of ' + fmt(MAX), null);
-    else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : cfg.mode === 'rush' ? 'Rush Hour' : 'Race', null);
+    var rr = store.race;
+    if (cfg.mode === 'journey') setTitle(cfg.title, 'of ' + fmt(MAX) + (raceLive(rr) && !rr.out && !rr.doneAt ? ' · ⚡ ' + rr.streak + '/' + RUSH_WINS : ''), null);
+    else setTitle(cfg.title, cfg.mode === 'daily' ? dayKey() : 'Race', null);
     var pausable = cfg.mode !== 'online';
     $('btn-quit').innerHTML = pausable ? PAUSE_ICON : '←'; $('btn-quit').setAttribute('aria-label', pausable ? 'Pause' : 'Leave race');
     G.shownScore = 0; setHeat(0); $('score').textContent = '0'; $('combo-bar').style.width = '0';
@@ -571,6 +580,7 @@
 
   function startLevel(level) {
     level = Math.max(1, Math.min(MAX, level));
+    if ((level >= store.level || store.done) && maybeStartRush()) { rushAnnounce(function () { startLevel(level); }); return; }
     startTimed(M.generateLevel(level), { mode: 'journey', level: level, title: 'Level ' + fmt(level) });
     if (level < MAX) setTimeout(function () { M.generateLevel(level + 1); }, 500);
     if (level === 1 && !store.seenHowto) { store.seenHowto = true; save(); G.paused = true; howTo(function () { G.paused = false; }); }
@@ -600,7 +610,6 @@
   }
 
   function tickTimed(dt) {
-    if (G.mode === 'rush' && !G.over && !G.paused && $('modal').hidden) G.elapsed = (G.elapsed || 0) + dt;
     if (G.over || G.paused || !G.limit || isTurns()) return;
     if (G.mode !== 'online' && !$('modal').hidden) return;
     var before = Math.ceil(G.timeLeft / 1000);
@@ -654,9 +663,8 @@
     box.firstChild.textContent = 'You cleared ' + cleared + ' of ' + G.lay.n + ' tiles.';
     box.querySelector('i').style.width = Math.round(100 * cleared / G.lay.n) + '%';
     var giveUp = function (then) { G.stuck = false; timedFail('No moves left', true); if (then) then(); };
-    var canRevive = G.mode !== 'rush' || (R && R.revives < 1);
-    if (!canRevive) box.querySelector('.revive-note').textContent = 'Your one revive for this run is used.';
-    else if (G.mode === 'rush') box.querySelector('.revive-note').textContent = 'Watch a short video for 2 free shuffles. One revive per Rush run.';
+    var canRevive = true;
+    if (G.mode === 'journey' && raceLive(store.race) && !store.race.out && !store.race.doneAt) box.querySelector('.revive-note').textContent = 'Watch a short video for 2 free shuffles and keep your Rush Hour streak alive.';
     modal({
       kind: 'fail', eyebrow: G.mode === 'daily' ? 'Daily board' : 'Level ' + fmt(G.level), title: 'No moves left', body: box,
       back: function () { closeModal(); giveUp(); },
@@ -665,7 +673,6 @@
       ].concat(canRevive ? [{ label: adLabel('+2 shuffles'), primary: true, run: function () {
           watchAd().then(function (ok) {
             if (!ok) { stuck(); return; }
-            if (R && G.mode === 'rush') R.revives++;
             G.stuck = false; G.revived = true; G.shuffles += 2; updateTimedHud(); useShuffle();
           });
         } }] : [])
@@ -697,33 +704,143 @@
 
 
   // ------------------------------------------------------------- Rush Hour
-  // A daily event from level 30: the same seven boards for everyone, cleared in a row without failing.
-  // The run's score goes on the "Rush Hour" leaderboard (shown for today), where the player sees the
-  // ~50 players ranked around them. The day turns over at 08:00 UTC, with Google Play's daily leaderboards.
-  var RUSH_FROM = 30, RUSH_N = M.RUSH_BOARDS || 7, RUSH_DONE_COINS = 150;
-  var R = null;   // the run in progress: { day, k, score, revives }
-  function rushDay() { return new Date(Date.now() - 8 * 3600e3).toISOString().slice(0, 10); }
-  function rushLeft() { var d = new Date(Date.now() - 8 * 3600e3); return 864e5 - (d.getTime() % 864e5); }
-  function fmtLeft(ms) { var m = Math.ceil(ms / 60000), h = Math.floor(m / 60); return h ? h + 'h ' + (m % 60) + 'm' : m + 'm'; }
+  // From level 30 the game itself starts a Rush Hour now and then while you play: a 45-minute race
+  // against 24 rivals at your level. Win 7 journey levels in a row; one lost board knocks you out.
+  // The first three to 7 wins take the big prizes. Rivals are computer players paced to your level
+  // (there is no game server), seeded so a race reads the same every time you look.
+  var RUSH_FROM = 30, RUSH_WINS = 7, RUSH_MIN = 45, RUSH_RIVALS = 24, RUSH_PRIZES = [500, 300, 200], RUSH_FINISH = 100;
+  var RIVAL_NAMES = ['Mei', 'LotusKing', 'Arjun', 'Sofia_K', 'TileMaster', 'Hiro', 'Amira', 'Lucas77', 'ZenPanda', 'Fatima', 'Kenji', 'Olivia',
+    'Omar.J', 'Priya', 'ChenWei', 'AvaRose', 'Ali_99', 'Noah', 'Yuki', 'Elena', 'Bilal', 'Mateo', 'Hana', 'Zara', 'Diego', 'Aisha', 'Leo_M',
+    'Nadia', 'Ravi', 'Lina', 'JadeFox', 'Bamboo88', 'DragonLi', 'Sakura', 'Emma.B', 'Musa', 'Ivan', 'Chloe', 'Tariq', 'Mina', 'Kai', 'Ines',
+    'Rohan', 'Lea', 'Samir', 'Nora', 'Felix', 'Layla', 'Jun', 'Maya', 'PearlTiles', 'Hamza', 'Isla', 'TigerLily', 'Ayaan', 'Rin', 'Sven', 'Dalia'];
+  var AV_COLORS = ['#ffd27a', '#9fe3b8', '#a9c4ff', '#ffb3a4', '#e6b8ff', '#9fe7e0', '#ffe39a', '#c9d6a0'];
   function rushUnlocked() { return store.done || store.level > RUSH_FROM; }
-  function rushToday() {
-    var r = store.rush || (store.rush = { day: '', best: 0, runs: 0, bestEver: 0, cleared: 0 });
-    if (r.day !== rushDay()) { r.day = rushDay(); r.best = 0; r.runs = 0; r.cleared = 0; }
-    return r;
+  function seeded(seed) { var a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  /** The race's rivals, each with the minute it wins each level (and when it drops out, if it does). */
+  function rushRivals(race) {
+    if (race._rivals) return race._rivals;
+    var r = seeded(race.seed), used = {}, out = [];
+    for (var i = 0; i < RUSH_RIVALS; i++) {
+      var name; do { name = RIVAL_NAMES[Math.floor(r() * RIVAL_NAMES.length)]; } while (used[name]); used[name] = 1;
+      var pace = 2.6 + r() * 4.4, failP = 0.04 + r() * 0.2, t = 0.5 + r() * 2, wins = [], outAt = 0;
+      for (var k = 0; k < RUSH_WINS; k++) {
+        t += pace * (0.65 + r() * 0.7);
+        if (r() < failP) { outAt = t; break; }
+        wins.push(t);
+      }
+      out.push({ name: name, color: AV_COLORS[i % AV_COLORS.length], wins: wins, outAt: outAt });
+    }
+    race._rivals = out;
+    return out;
   }
+  function raceMinutes(race, at) { return ((at || Date.now()) - race.start) / 60000; }
+  function raceLive(race) { return !!race && Date.now() < race.end; }
+  /** Everyone's standing at a moment: finished first (by finish time), then most wins, the knocked out last. */
+  function raceStandings(race, at) {
+    var m = raceMinutes(race, Math.min(at || Date.now(), race.end)), rows = rushRivals(race).map(function (v) {
+      var w = v.wins.filter(function (t) { return t <= m; }).length, done = w >= RUSH_WINS ? v.wins[RUSH_WINS - 1] : 0;
+      return { name: v.name, color: v.color, wins: w, done: done, out: !!(v.outAt && v.outAt <= m) };
+    });
+    rows.push({ name: GS.state.signedIn && GS.state.name ? GS.state.name : 'You', me: true, color: '#ffc46a', wins: race.streak,
+      done: race.doneAt ? raceMinutes(race, race.doneAt) : 0, out: race.out });
+    rows.sort(function (a, b) {
+      if (!!a.done !== !!b.done) return a.done ? -1 : 1;
+      if (a.done) return a.done - b.done;
+      if (a.out !== b.out) return a.out ? 1 : -1;
+      return b.wins - a.wins || (a.me ? -1 : b.me ? 1 : 0);
+    });
+    return rows;
+  }
+  function racePlace(race) { var rows = raceStandings(race); for (var i = 0; i < rows.length; i++) if (rows[i].me) return i + 1; return rows.length; }
+  function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  /** Close a race whose time is up, and schedule when the next one may start (1 to 3 hours later). */
+  function settleRace() {
+    var race = store.race;
+    if (!race || race.settled || raceLive(race)) return;
+    race.settled = true; race.finalPlace = racePlace(race);
+    store.rushNext = race.end + (60 + Math.random() * 120) * 60000;
+    save();
+  }
+  /** Called while the player is playing; starts a race at random when one is due. Returns true if it did. */
+  function maybeStartRush() {
+    settleRace();
+    if (!rushUnlocked() || raceLive(store.race)) return false;
+    var first = !store.rushCount;
+    if (!first && Date.now() < (store.rushNext || 0)) return false;
+    if (!first && Math.random() > 0.35) return false;
+    var now = Date.now();
+    store.race = { id: now, seed: (now ^ 0x5bd1e995) >>> 0, start: now, end: now + RUSH_MIN * 60000, streak: 0, out: false, doneAt: 0, prize: 0 };
+    store.rushCount = (store.rushCount || 0) + 1;
+    save();
+    return true;
+  }
+  function rushAnnounce(then) {
+    var box = document.createElement('div');
+    box.innerHTML = '<p class="revive-note"></p>';
+    box.firstChild.textContent = (RUSH_RIVALS + 1) + ' players at your level are racing. Win ' + RUSH_WINS + ' levels in a row within ' + RUSH_MIN +
+      ' minutes. Lose one board and you are out. Top 3 win ' + RUSH_PRIZES.join(' / ') + ' coins; every finisher gets ' + RUSH_FINISH + '.';
+    box.appendChild(raceList(store.race, 5));
+    A.win(); buzz([30, 40, 30]);
+    modal({ kind: 'result', eyebrow: '⚡ Rush Hour', title: 'A Rush Hour has started!', body: box,
+      back: function () { closeModal(); if (then) then(); },
+      actions: [{ label: 'Let’s go', icon: 'play', primary: true, run: function () { if (then) then(); } }] });
+  }
+  function raceList(race, limit) {
+    var rows = raceStandings(race), ol = document.createElement('ol'); ol.className = 'race-list';
+    var meIdx = rows.findIndex(function (r) { return r.me; });
+    rows.forEach(function (r, i) {
+      if (limit && i >= limit && i !== meIdx) return;
+      var li = document.createElement('li'); li.className = (r.me ? 'me' : '') + (r.out ? ' out' : '');
+      var pips = ''; for (var k = 0; k < RUSH_WINS; k++) pips += '<i class="' + (k < r.wins ? 'on' : '') + '"></i>';
+      li.innerHTML = '<b>' + (i + 1) + '</b><span class="av"></span><span class="nm"></span>' + (r.done ? '<span class="done">✓ 7</span>' : r.out ? '<span class="done" style="color:#ff9a8a">out</span>' : '<span class="pips">' + pips + '</span>');
+      li.querySelector('.av').textContent = r.name.charAt(0).toUpperCase(); li.querySelector('.av').style.background = r.color;
+      li.querySelector('.nm').textContent = r.me && r.name !== 'You' ? r.name + ' (you)' : r.name;
+      ol.appendChild(li);
+    });
+    return ol;
+  }
+  /** A level was won (journey, new level) or lost: move the player's race on. Returns a note for the result screen. */
+  function rushResult(won) {
+    var race = store.race;
+    if (!raceLive(race) || race.out || race.doneAt) return null;
+    if (!won) { race.out = true; save(); return 'Rush Hour: one lost board and you are out of this race (' + race.streak + ' / ' + RUSH_WINS + ').'; }
+    race.streak++;
+    if (race.streak >= RUSH_WINS) {
+      race.doneAt = Date.now();
+      var place = racePlace(race), prize = place <= 3 ? RUSH_PRIZES[place - 1] : RUSH_FINISH;
+      race.prize = prize; addCoins(prize);
+      store.rushWins = (store.rushWins || 0) + 1;
+      store.rushBest = Math.min(store.rushBest || 99, place);
+      save();
+      GS.submit('rush', store.rushWins);
+      confetti.burst(320);
+      return '⚡ Rush Hour complete: ' + ordinal(place) + ' of ' + (RUSH_RIVALS + 1) + '! +' + prize + ' coins';
+    }
+    save();
+    return '⚡ Rush Hour: ' + race.streak + ' / ' + RUSH_WINS + ' wins in a row · ' + ordinal(racePlace(race)) + ' place';
+  }
+  function rushNoteEl(text) { var d = document.createElement('div'); d.className = 'rush-banner'; d.innerHTML = '<b>⚡</b><span></span>'; d.lastChild.textContent = text.replace(/^⚡ /, ''); return d; }
   function refreshRushCard() {
     var c = $('btn-rush'); if (!c) return;
-    var open = rushUnlocked(), r = rushToday();
+    settleRace();
+    var open = rushUnlocked(), race = store.race, live = raceLive(race);
     c.classList.toggle('locked', !open);
-    $('rush-when').textContent = open ? 'ends in ' + fmtLeft(rushLeft()) : 'from level ' + RUSH_FROM;
-    $('rush-meta').textContent = !open ? 'Clear level ' + RUSH_FROM + ' to join · ' + Math.min(RUSH_FROM, store.level - 1) + ' / ' + RUSH_FROM
-      : r.best ? 'Best today ' + fmt(r.best) + (r.cleared ? ' · cleared ' + r.cleared + '×' : '') : 'Compete with 50 players at your rank';
+    $('tab-rush-dot').hidden = !live || race.out || !!race.doneAt;
+    document.querySelector('.tab-rush').classList.toggle('live', live);
+    if (!open) {
+      $('rush-when').textContent = 'from level ' + RUSH_FROM;
+      $('rush-meta').textContent = 'Clear level ' + RUSH_FROM + ' to join · ' + Math.min(RUSH_FROM, store.level - 1) + ' / ' + RUSH_FROM;
+    } else if (live) {
+      $('rush-when').textContent = 'live · ends in ' + fmtLeft(race.end - Date.now());
+      $('rush-meta').textContent = race.doneAt ? 'Finished ' + ordinal(racePlace(race)) + ' · +' + race.prize + ' coins' : race.out ? 'You are out of this one' : race.streak + ' / ' + RUSH_WINS + ' wins in a row · ' + ordinal(racePlace(race)) + ' place';
+    } else {
+      $('rush-when').textContent = 'starts at random';
+      $('rush-meta').textContent = 'Keep playing levels: the next race can start any time';
+    }
+    var t = c.querySelector('.rush-title'); if (t) t.textContent = live ? 'Race in progress' : RUSH_WINS + ' wins in a row, no fails';
   }
-  function rushSteps(k, done) {
-    var d = document.createElement('div'); d.className = 'rush-steps';
-    for (var i = 0; i < RUSH_N; i++) { var t = document.createElement('i'); t.textContent = i + 1; t.className = i < done ? 'done' : i === k ? 'now' : ''; d.appendChild(t); }
-    return d;
-  }
+  function fmtLeft(ms) { var m = Math.max(1, Math.ceil(ms / 60000)), h = Math.floor(m / 60); return h ? h + 'h ' + (m % 60) + 'm' : m + 'm'; }
+
   /** Ranking list (async): the players around this one, or a sign-in prompt. */
   function rankBlock(kind, span, emptyText) {
     var wrap = document.createElement('div');
@@ -760,99 +877,71 @@
     });
     return wrap;
   }
-  function openRush() {
-    var r = rushToday(), box = document.createElement('div');
-    if (!rushUnlocked()) {
-      var cleared = Math.min(RUSH_FROM, store.level - 1);
-      box.className = 'fail-meter';
-      box.innerHTML = '<p></p><div class="fail-bar"><i></i></div><p class="revive-note"></p>';
-      box.firstChild.textContent = 'Rush Hour opens after level ' + RUSH_FROM + '. You have cleared ' + cleared + '.';
-      box.querySelector('i').style.width = Math.round(100 * cleared / RUSH_FROM) + '%';
-      box.lastChild.textContent = 'Every day, clear ' + RUSH_N + ' boards in a row without failing and climb the ranking against players at your level.';
-      modal({ kind: 'pause', eyebrow: 'Rush Hour', title: 'Locked', body: box, back: closeModal, actions: [{ label: 'Close' }, { label: 'Play on', icon: 'play', primary: true, run: function () { startLevel(store.level); } }] });
-      return;
-    }
-    var p = document.createElement('p'); p.className = 'revive-note';
-    p.textContent = 'Clear ' + RUSH_N + ' boards in a row. One fail ends the run. Faster clears and long combos score more. Finish all ' + RUSH_N + ' for ' + RUSH_DONE_COINS + ' coins.';
-    box.appendChild(p);
-    box.appendChild(resultGrid([['Best today', r.best || 0, 'score'], ['Ends in', fmtLeft(rushLeft()), 'clock']]));
-    box.appendChild(rankBlock('rush', 'day', 'No scores yet today. Be the first!'));
-    modal({ kind: 'themes', eyebrow: 'Rush Hour · ' + r.day, title: 'Today’s Rush', body: box, back: closeModal,
-      actions: [{ label: 'Close' }, { label: 'Start run', icon: 'play', primary: true, run: function () { startRush(); } }] });
-  }
-  function startRush() {
-    R = { day: rushDay(), k: 0, score: 0, revives: 0 };
-    rushBoard();
-  }
-  function rushBoard() {
-    startTimed(M.generateRush(R.day, R.k), { mode: 'rush', title: 'Board ' + (R.k + 1) + ' of ' + RUSH_N });
-    G.elapsed = 0;
-  }
-  function rushEnd(complete) {
-    var r = rushToday(), score = R.score;
-    r.runs++; if (complete) r.cleared++;
-    var best = score > r.best; if (best) r.best = score;
-    r.bestEver = Math.max(r.bestEver || 0, score);
-    save();
-    GS.submit('rush', score);
-    var boardsDone = R.k + (complete ? 1 : 0);
-    R = null;
-    return { best: best, boards: boardsDone };
-  }
-  function rushWon(stars) {
-    var speed = Math.max(0, 240 - Math.floor((G.elapsed || 0) / 1000)) * 4;
-    var gained = G.score + speed;
-    R.score += gained;
-    var coins = 10 + 2 * stars; addCoins(coins);
-    Ads.boardFinished();
-    var grid = resultGrid([['Board score', G.score, 'score'], ['Speed bonus', '+' + speed, 'clock'], ['Run score', R.score, 'bonus'], ['Coins', '+' + coins, 'coin']]);
-    if (R.k + 1 >= RUSH_N) {
-      addCoins(RUSH_DONE_COINS); confetti.burst(320);
-      var end = rushEnd(true), wrap = document.createElement('div');
-      wrap.appendChild(rushSteps(-1, RUSH_N)); wrap.appendChild(grid);
-      var msg = document.createElement('p'); msg.className = 'revive-note';
-      msg.textContent = 'All ' + RUSH_N + ' boards without a fail! +' + RUSH_DONE_COINS + ' bonus coins.' + (end.best ? ' New best today.' : '');
-      wrap.appendChild(msg);
-      modal({ kind: 'result', eyebrow: 'Rush Hour', title: 'Rush cleared!', stars: 3, body: wrap, adGate: 99, back: function () { closeModal(); show('home'); },
-        actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'Ranking', icon: 'trophy', primary: true, run: function () { show('home'); openRush(); } }] });
-      return;
-    }
-    var box = document.createElement('div'); box.appendChild(rushSteps(R.k + 1, R.k + 1)); box.appendChild(grid);
-    R.k++;
-    modal({ kind: 'result', eyebrow: 'Rush Hour', title: 'Board ' + R.k + ' of ' + RUSH_N + ' cleared', stars: stars, body: box, adGate: 99,
-      back: function () { closeModal(); rushBoard(); },
-      actions: [{ label: 'Next board', icon: 'play', primary: true, run: rushBoard }] });
-  }
-  function rushFailed(reason) {
-    var k = R.k, score = R.score, end = rushEnd(false);
-    Ads.boardFinished();
-    var box = document.createElement('div'); box.appendChild(rushSteps(k, k));
-    box.appendChild(resultGrid([['Boards cleared', k + ' / ' + RUSH_N, 'tiles'], ['Run score', score, 'score']]));
-    var p = document.createElement('p'); p.className = 'revive-note';
-    p.textContent = (end.best ? 'New best today! ' : '') + 'Your score is on today’s Rush Hour ranking.';
-    box.appendChild(p);
-    modal({ kind: 'fail', eyebrow: 'Rush Hour', title: reason === 'quit' ? 'Run ended' : 'Run over', body: box, adGate: 99, back: function () { closeModal(); show('home'); },
-      actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'New run', icon: 'restart', primary: true, run: startRush }] });
-  }
 
-  // ------------------------------------------------------------- leaderboards
-  function journeyScore() { return store.done ? MAX : store.level - 1; }
-  function openRanks() {
-    var box = document.createElement('div'), r = rushToday();
-    box.appendChild(resultGrid([['Levels cleared', journeyScore(), 'trophy'], ['Rush best today', r.best || 0, 'score']]));
-    if (GS.state.signedIn) {
-      var who = document.createElement('p'); who.className = 'rank-note';
-      who.textContent = 'Signed in to ' + GS.serviceName() + (GS.state.name ? ' as ' + GS.state.name : '') + '.';
-      box.appendChild(who);
-    }
-    box.appendChild(rankBlock('journey', 'all', 'No one is ranked yet.'));
-    var actions = [{ label: 'Close' }];
-    if (GS.state.signedIn) actions.push({ label: 'All leaderboards', icon: 'trophy', primary: true, run: function () { GS.show().then(function (ok) { if (!ok) toast('Leaderboards could not be opened.'); }); } });
-    else actions.push({ label: 'Rush Hour', icon: 'play', primary: true, run: openRush });
-    modal({ kind: 'themes', eyebrow: 'Journey ranking', title: 'Leaderboards', body: box, back: closeModal, actions: actions });
+  // ------------------------------------------------------------- tab screens
+  function card(title, text) {
+    var c = document.createElement('section'); c.className = 'tab-card';
+    if (title) { var h = document.createElement('h3'); h.textContent = title; c.appendChild(h); }
+    if (text) { var p = document.createElement('p'); p.textContent = text; c.appendChild(p); }
+    return c;
   }
+  function renderRush() {
+    settleRace();
+    var body = $('rush-body'), race = store.race, live = raceLive(race);
+    body.innerHTML = '';
+    $('rush-clock').textContent = live ? fmtLeft(race.end - Date.now()) : '';
+    if (!rushUnlocked()) {
+      var cleared = Math.min(RUSH_FROM, store.level - 1), c0 = card('Locked', 'Rush Hour opens after level ' + RUSH_FROM + '. You have cleared ' + cleared + '.');
+      var bar = document.createElement('div'); bar.className = 'fail-bar'; bar.innerHTML = '<i></i>'; bar.firstChild.style.width = Math.round(100 * cleared / RUSH_FROM) + '%';
+      c0.appendChild(bar);
+      body.appendChild(c0);
+      body.appendChild(card('How it works', 'While you play, the game starts a Rush Hour at random: ' + (RUSH_RIVALS + 1) + ' players at your level race to win ' + RUSH_WINS +
+        ' levels in a row within ' + RUSH_MIN + ' minutes. One lost board and you are out. Top 3 win ' + RUSH_PRIZES.join(' / ') + ' coins.'));
+      return;
+    }
+    if (race && (live || race.settled)) {
+      var c1 = card(live ? 'Live race' : 'Last race',
+        live ? (race.doneAt ? 'You finished ' + ordinal(racePlace(race)) + ' and won ' + race.prize + ' coins!' : race.out ? 'You lost a board and are out of this race. The next one starts at random later.' :
+          'Win ' + (RUSH_WINS - race.streak) + ' more level' + (RUSH_WINS - race.streak === 1 ? '' : 's') + ' in a row. Ends in ' + fmtLeft(race.end - Date.now()) + '.')
+          : 'You placed ' + ordinal(race.finalPlace || racePlace(race)) + ' of ' + (RUSH_RIVALS + 1) + (race.prize ? ' and won ' + race.prize + ' coins.' : '.'));
+      c1.appendChild(raceList(race));
+      var foot = document.createElement('p'); foot.className = 'race-foot'; foot.textContent = 'Rivals are computer players matched to your level.';
+      c1.appendChild(foot);
+      if (live && !race.out && !race.doneAt) {
+        var go = document.createElement('button'); go.type = 'button'; go.className = 'primary'; go.innerHTML = icon('play', 20) + '<span></span>';
+        go.lastChild.textContent = 'Play level ' + fmt(store.level); go.addEventListener('click', function () { startLevel(store.level); });
+        c1.appendChild(go);
+      }
+      body.appendChild(c1);
+    }
+    if (!live) body.appendChild(card('Next Rush Hour', 'Starts at random while you play journey levels. Keep winning: when it begins, ' + (RUSH_RIVALS + 1) + ' players race to ' + RUSH_WINS + ' wins in a row.'));
+    body.appendChild(resultGridCard([['Races won', store.rushWins || 0, 'trophy'], ['Best place', store.rushBest && store.rushBest < 99 ? ordinal(store.rushBest) : '–', 'score']]));
+    var lb = card('Rush Hour leaderboard', 'Players with the most completed Rush Hours.');
+    lb.appendChild(rankBlock('rush', 'all', 'No one has finished a Rush Hour yet. Be the first!'));
+    body.appendChild(lb);
+  }
+  function resultGridCard(rows) { var c = card(null, null); c.appendChild(resultGrid(rows)); return c; }
+  function journeyScore() { return store.done ? MAX : store.level - 1; }
+  function renderRanks() {
+    var body = $('ranks-body'); body.innerHTML = '';
+    var me = card(GS.state.signedIn ? (GS.state.name || 'You') : 'Your progress', GS.state.signedIn ? 'Signed in to ' + GS.serviceName() + '.' : null);
+    me.appendChild(resultGrid([['Levels cleared', journeyScore(), 'trophy'], ['Stars', totalStars(), 'score'], ['Rush wins', store.rushWins || 0, 'bonus'], ['Coins', store.coins || 0, 'coin']]));
+    body.appendChild(me);
+    var j = card('Journey', 'Highest level cleared, around your rank.');
+    j.appendChild(rankBlock('journey', 'all', 'No one is ranked yet.'));
+    body.appendChild(j);
+    if (GS.state.signedIn) {
+      var all = document.createElement('button'); all.type = 'button'; all.className = 'gs-btn'; all.innerHTML = icon('trophy', 18) + '<span>All leaderboards</span>';
+      all.addEventListener('click', function () { GS.show().then(function (ok) { if (!ok) toast('Leaderboards could not be opened.'); }); });
+      body.appendChild(all);
+    }
+  }
+  function openRanks() { show('ranks'); }
+  function openRush() { show('rush'); }
   GS.onChange(function (st) {
-    if (st.signedIn) { GS.submit('journey', journeyScore()); var b = rushToday().best; if (b) GS.submit('rush', b); }
+    if (st.signedIn) { GS.submit('journey', journeyScore()); if (store.rushWins) GS.submit('rush', store.rushWins); }
+    if (!$('ranks').hidden) renderRanks();
+    if (!$('rush').hidden) renderRush();
   });
 
   function timedWin() {
@@ -869,7 +958,6 @@
     }
     G.score += bonus;
     A.win();
-    if (G.mode === 'rush') { confetti.burst(stars === 3 ? 160 : 90); setHeat(0); buzz([20, 40, 20]); rushWon(stars); return; }
     if (G.duel !== 'race') {
       var firstClear = G.mode === 'journey' ? G.level === store.level : !store.daily[dayKey()];
       coins = G.mode === 'daily' ? 40 + 5 * Math.min(10, store.streak.n || 0) : 10 + 5 * stars + Math.floor((G.level || 0) / 100);
@@ -898,6 +986,9 @@
       return;
     }
     var L = G.level, newBest = G.score > (store.best[L] || 0);
+    // Rush Hour counts new levels only, so replaying level 1 seven times does not win a race.
+    var rushNote = L >= store.level || store.done ? rushResult(true) : null;
+    if (rushNote) { var gw = document.createElement('div'); gw.className = 'result-wrap'; gw.appendChild(rushNoteEl(rushNote)); gw.appendChild(grid); grid = gw; }
     if (stars > (store.stars[L] || 0)) store.stars[L] = stars;
     if (newBest) store.best[L] = G.score;
     var finale = L === MAX && !store.done;
@@ -912,17 +1003,16 @@
       msg.textContent = 'You cleared all ' + fmt(MAX) + ' levels of Jade Rush with ' + fmt(totalStars()) + ' ★. Replay any level from the map to chase three stars.';
       wrap.appendChild(msg); wrap.appendChild(grid);
       modal({ kind: 'result', eyebrow: 'Level ' + fmt(MAX), title: 'Journey complete!', stars: stars, body: wrap, back: function () { closeModal(); show('home'); },
-        actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'Level map', icon: 'trophy', primary: true, run: function () { renderLevelGrid(); show('levels'); } }] });
+        actions: [{ label: 'Menu', icon: 'home', run: function () { show('home'); } }, { label: 'Level map', icon: 'trophy', primary: true, run: function () { show('levels'); } }] });
       return;
     }
-    var next = L < MAX ? { label: 'Next level', icon: 'play', primary: true, run: function () { startLevel(L + 1); } } : { label: 'Level map', icon: 'trophy', primary: true, run: function () { renderLevelGrid(); show('levels'); } };
+    var next = L < MAX ? { label: 'Next level', icon: 'play', primary: true, run: function () { startLevel(L + 1); } } : { label: 'Level map', icon: 'trophy', primary: true, run: function () { show('levels'); } };
     modal({ kind: 'result', eyebrow: 'Level ' + fmt(L), title: title, stars: stars, body: grid, adGate: L, back: function () { closeModal(); show('home'); }, actions: [{ label: 'Replay', icon: 'restart', run: function () { startLevel(L); } }, next] });
   }
 
   function timedFail(reason, quiet) {
     if (G.over) return;
     G.over = true; if (!quiet) A.lose();
-    if (G.mode === 'rush') { setHeat(0); rushFailed(reason); return; }
     if (G.duel === 'race') {
       Net.send({ t: 'out', left: G.left, score: G.score });
       if (G.rival.out) resolveRace();
@@ -935,6 +1025,8 @@
     meter.innerHTML = '<p></p><div class="fail-bar"><i></i></div>';
     meter.firstChild.textContent = 'You cleared ' + cleared + ' of ' + G.lay.n + ' tiles.';
     meter.querySelector('i').style.width = Math.round(100 * cleared / G.lay.n) + '%';
+    var rushNote = G.mode === 'journey' && (G.level >= store.level || store.done) ? rushResult(false) : null;
+    if (rushNote) meter.appendChild(rushNoteEl(rushNote));
     modal({
       kind: 'fail', eyebrow: G.mode === 'daily' ? 'Daily board' : 'Level ' + fmt(G.level), title: reason, adGate: G.level || 99, back: function () { closeModal(); show('home'); },
       body: meter,
@@ -956,7 +1048,7 @@
 
   function useHint() {
     if (G.over || isTurns()) return;
-    if (G.hints <= 0) { if (G.limit || G.mode === 'rush') toast('No hints left on this board.'); else offerMore('hint'); return; }
+    if (G.hints <= 0) { if (G.limit) toast('No hints left on this board.'); else offerMore('hint'); return; }
     var pairs = M.freePairs(G.lay, G.present, G.kinds);
     if (!pairs.length) { toast('No moves left. Shuffle!'); return; }
     var pick = null, sol = G.gen.solution;
@@ -973,7 +1065,7 @@
 
   function useShuffle() {
     if (G.over || isTurns()) return;
-    if (G.shuffles <= 0) { if (G.limit || G.mode === 'rush') toast('No shuffles left on this board.'); else offerMore('shuffle'); return; }
+    if (G.shuffles <= 0) { if (G.limit) toast('No shuffles left on this board.'); else offerMore('shuffle'); return; }
     var next = M.reshuffle(G.lay, G.present, G.kinds, Math.random);
     if (!next) { if (G.limit) timedFail('No moves left'); else stuck(); return; }
     var old = G.kinds;
@@ -1118,9 +1210,15 @@
     startTurns({ mode: G.mode, size: G.size, aiLevel: G.aiLevel, me: 0, first: 1 - G.first, seed: Math.floor(Math.random() * 1e9) });
   }
 
+  // Walking away from (or restarting) a started journey board during a Rush Hour counts as losing it.
+  function abandonBoard() {
+    if (G.mode === 'journey' && G.lay && !G.over && G.left < G.lay.n && (G.level >= store.level || store.done)) {
+      var note = rushResult(false); if (note) toast(note, 3200);
+    }
+  }
   function leaveGame() {
+    abandonBoard();
     if (G.mode === 'online') Net.close();
-    if (G.mode === 'rush' && R) rushEnd(false);   // leaving mid-run still counts the score so far
     G = { mode: null };
     show('home');
   }
@@ -1388,16 +1486,15 @@
   }
 
   // ------------------------------------------------------------- pause & settings
-  function canPause() { return !$('game').hidden && G.lay && !G.over && (G.mode === 'journey' || G.mode === 'daily' || G.mode === 'rush' || G.mode === 'local' || G.mode === 'ai'); }
+  function canPause() { return !$('game').hidden && G.lay && !G.over && (G.mode === 'journey' || G.mode === 'daily' || G.mode === 'local' || G.mode === 'ai'); }
   function pauseGame() {
     if (!canPause() || !$('modal').hidden) return;
     var turnLeft = isTurns() ? G.turnEnd - performance.now() : 0;
     G.paused = true;
     var resume = function () { G.paused = false; if (isTurns()) G.turnEnd = performance.now() + turnLeft; };
     var restart = function () {
-      G.paused = false;
+      G.paused = false; abandonBoard();
       if (G.mode === 'journey') startLevel(G.level); else if (G.mode === 'daily') startDaily();
-      else if (G.mode === 'rush') rushBoard();
       else startTurns({ mode: G.mode, size: G.size, aiLevel: G.aiLevel, me: G.me, first: G.first, seed: Math.floor(Math.random() * 1e9) });
     };
     var info = document.createElement('div'); info.className = 'pause-info';
@@ -1408,11 +1505,11 @@
       kind: 'pause', eyebrow: $('game-title').lastChild.textContent, title: 'Paused', body: info, back: function () { closeModal(); resume(); },
       actions: [
         { label: 'Resume', icon: 'play', primary: true, cls: 'resume-btn', run: resume },
-        { label: G.mode === 'rush' ? 'End run' : 'Quit', icon: 'home', cls: 'pause-opt', run: function () { G.paused = false; if (G.mode === 'rush') timedFail('quit', true); else leaveGame(); } },
-      ].concat(G.mode === 'rush' ? [] : [{ label: 'Restart', icon: 'restart', cls: 'pause-opt', run: restart }]).concat([
+        { label: 'Quit', icon: 'home', cls: 'pause-opt', run: function () { G.paused = false; leaveGame(); } },
+        { label: 'Restart', icon: 'restart', cls: 'pause-opt', run: restart },
         // stays paused while Settings is open; coming back re-opens this menu with the same turn time
         { label: 'Settings', icon: 'gear', cls: 'pause-opt', run: function () { openSettings(function () { resume(); pauseGame(); }); } }
-      ])
+      ]
     });
   }
 
@@ -1444,7 +1541,6 @@
       store.lite = v; window.JadeLite = v; save(); refreshSkyHint(); board.resize(); demo.resize(); sky.resize();
     }, 'leaf'));
     group('More');
-    box.appendChild(linkRow('Shop: tile sets and boards', function () { closeModal(); openThemes(done); }, 'palette'));
     box.appendChild(linkRow('How to play', function () { closeModal(); howTo(done); }, 'help'));
     box.appendChild(linkRow('Privacy policy', function () { window.open(PRIVACY_URL, '_blank'); }, 'shield'));
     if (Ads.hasPrivacyOptions()) box.appendChild(linkRow('Ad privacy choices', function () { Ads.showPrivacyOptions(); }, 'ad'));
@@ -1475,14 +1571,14 @@
   var SHOP_GROUPS = [['classic', 'Classic'], ['woods', 'Woods'], ['marble', 'Marble'], ['ivory', 'Ivory'], ['bamboo', 'Bamboo'],
     ['jadestone', 'Jade'], ['rosequartz', 'Rose'], ['lapis', 'Lapis'], ['gold', 'Gold'], ['obsidianglass', 'Obsidian']];
   var shopState = { tab: 'tiles', group: 'classic' };
-  function openThemes(after) { openShop(after); }
-  function openShop(after, keep) {
-    if (typeof after !== 'function') after = null;
-    if (!keep) shopState.after = after; else after = shopState.after;
+  function openThemes() { openShop(); }
+  function openShop() { if ($('shop').hidden) show('shop'); else renderShop(); }
+  function renderShop() {
     var stars = totalStars(), cur = currentTheme(), curBoard = currentBoard();
     var box = document.createElement('div'); box.className = 'shop';
     var head = document.createElement('div'); head.className = 'shop-head';
-    head.innerHTML = '<span class="coin-pill big">' + coinText(store.coins || 0) + '</span>';
+    head.className += ' shop-screen-head';
+    $('shop-coins').lastChild.textContent = fmt(store.coins || 0); $('shop-stars').textContent = '★ ' + fmt(stars);
     var free = document.createElement('button'); free.type = 'button'; free.className = 'ad-btn small';
     var today = dayKey(), fc = store.freeCoins && store.freeCoins.day === today ? store.freeCoins.n : 0;
     free.innerHTML = '▶ +' + FREE_COINS + ' coins <em>' + (FREE_COINS_PER_DAY - fc) + ' left today</em>';
@@ -1490,7 +1586,7 @@
     free.addEventListener('click', function () {
       watchAd().then(function (ok) {
         if (!ok) return;
-        store.freeCoins = { day: today, n: fc + 1 }; addCoins(FREE_COINS); toast('+' + FREE_COINS + ' coins', 1500); openShop(null, true);
+        store.freeCoins = { day: today, n: fc + 1 }; addCoins(FREE_COINS); toast('+' + FREE_COINS + ' coins', 1500); openShop();
       });
     });
     head.appendChild(free); box.appendChild(head);
@@ -1498,7 +1594,7 @@
     [['tiles', 'Tile sets'], ['boards', 'Boards']].forEach(function (t) {
       var b = document.createElement('button'); b.type = 'button'; b.textContent = t[1];
       b.setAttribute('aria-pressed', String(shopState.tab === t[0]));
-      b.addEventListener('click', function () { shopState.tab = t[0]; openShop(null, true); });
+      b.addEventListener('click', function () { shopState.tab = t[0]; openShop(); });
       tabs.appendChild(b);
     });
     box.appendChild(tabs);
@@ -1509,7 +1605,7 @@
       SHOP_GROUPS.forEach(function (g) {
         var c = document.createElement('button'); c.type = 'button'; c.className = 'chip'; c.textContent = g[1];
         c.setAttribute('aria-checked', String(shopState.group === g[0]));
-        c.addEventListener('click', function () { shopState.group = g[0]; openShop(null, true); });
+        c.addEventListener('click', function () { shopState.group = g[0]; openShop(); });
         chips.appendChild(c);
       });
       box.appendChild(chips);
@@ -1527,7 +1623,7 @@
         b.querySelector('small').innerHTML = tag;
         if (t.group === 'classic' && !have) b.querySelector('.unlock i').style.width = Math.round(100 * stars / t.stars) + '%';
         b.addEventListener('click', function () {
-          if (have) { store.theme = t.id; save(); applyTheme(); A.select(); openShop(null, true); return; }
+          if (have) { store.theme = t.id; save(); applyTheme(); A.select(); openShop(); return; }
           if (t.group === 'classic') { toast('Collect ' + fmt(t.stars) + ' ★ to unlock ' + t.name + '.'); return; }
           buySheet({ key: t.id, name: t.name, price: t.price, theme: t, use: function () { store.theme = t.id; applyTheme(); } });
         });
@@ -1543,15 +1639,15 @@
         b.querySelector('b').textContent = bd.name;
         b.querySelector('small').innerHTML = bd.id === curBoard.id ? '✓ In use' : have ? 'Tap to use' : coinText(bd.price);
         b.addEventListener('click', function () {
-          if (have) { store.board = bd.id; save(); applyBoardStyle(); A.select(); openShop(null, true); return; }
+          if (have) { store.board = bd.id; save(); applyBoardStyle(); A.select(); openShop(); return; }
           buySheet({ key: 'board:' + bd.id, name: bd.name, price: bd.price, board: bd, use: function () { store.board = bd.id; applyBoardStyle(); } });
         });
         grid.appendChild(b); previews.push([b.querySelector('canvas'), cur]);
       });
     }
     box.appendChild(grid);
-    var finish = function () { refreshHome(); if (after) after(); };
-    modal({ kind: 'themes', eyebrow: '★ ' + fmt(stars) + ' · ' + fmt(store.coins || 0) + ' coins', title: 'Shop', body: box, back: function () { closeModal(); finish(); }, actions: [{ label: 'Done', primary: true, run: finish }] });
+    var host = $('shop-body'), top = host.scrollTop;
+    host.innerHTML = ''; host.appendChild(box); host.scrollTop = top;
     drawPreviews(previews);
   }
   // A design not owned yet: buy it with coins, or watch videos (progress is kept between visits).
@@ -1565,10 +1661,10 @@
     body.appendChild(p);
     var unlock = function () {
       store.owned = (store.owned || []).concat([item.key]); store.adProgress = store.adProgress || {}; delete store.adProgress[item.key];
-      item.use(); save(); A.win(); confetti.burst(90); toast(item.name + ' unlocked!', 1800); openShop(null, true);
+      item.use(); save(); A.win(); confetti.burst(90); toast(item.name + ' unlocked!', 1800); openShop();
     };
     modal({
-      kind: 'themes', eyebrow: 'Shop', title: item.name, body: body, back: function () { closeModal(); openShop(null, true); },
+      kind: 'themes', eyebrow: 'Shop', title: item.name, body: body, back: function () { closeModal(); openShop(); },
       actions: [
         { label: coins >= item.price ? 'Buy · ' + fmt(item.price) : 'Need ' + fmt(item.price - coins) + ' more', run: function () {
           if ((store.coins || 0) < item.price) { toast('Win more boards to earn coins, or watch videos.'); buySheet(item); return; }
@@ -1618,6 +1714,8 @@
         '<div class="art art-combo"><b>×2</b><b>×5</b><b>×9</b><b class="hot">×12</b></div>'],
       ['Don\'t get stuck', 'No clock: take your time. If no pair is free, shuffle. Out of shuffles? Watch a short video for two more, or the board is lost.',
         '<div class="art art-clock"><div class="art-chips"><span>? Hint</span><span>⇄ Shuffle</span><span>▶ +2</span></div></div>'],
+      ['Rush Hour', 'From level 30 a Rush Hour starts at random while you play: 25 players race to win 7 levels in a row. Lose one and you are out. Top 3 win big.',
+        '<div class="art art-combo"><b>⚡1</b><b>⚡4</b><b class="hot">⚡7</b></div>'],
       ['Earn coins', 'Every cleared board pays coins. Spend them in the Shop on new tile sets and table designs.',
         '<div class="art art-combo"><b>+15</b><b>+25</b><b class="hot">+50</b></div>'],
       ['Duel your friends', 'Race on the same board, or take turns on one board: 15 seconds a turn, winds and dragons score 2.',
@@ -1648,7 +1746,7 @@
 
   // ------------------------------------------------------------- wiring
   $('btn-continue').addEventListener('click', function () { startLevel(store.level); });
-  $('btn-levels').addEventListener('click', function () { show('levels'); renderLevelGrid(); });
+  $('btn-levels').addEventListener('click', function () { show('levels'); });
   $('btn-daily').addEventListener('click', startDaily);
   $('btn-local').addEventListener('click', function () {
     var size = store.size;
@@ -1700,8 +1798,18 @@
   $('board').addEventListener('pointerleave', function () { board.setHover(-1); });
   $('btn-themes').addEventListener('click', function () { openThemes(); });
   $('btn-rush').addEventListener('click', openRush);
-  $('btn-ranks').addEventListener('click', openRanks);
-  setInterval(function () { if (!$('home').hidden) refreshRushCard(); }, 30000);
+  document.querySelectorAll('#tabbar [data-tab]').forEach(function (b) {
+    b.addEventListener('click', function () { A.select(); if ($(b.dataset.tab).hidden) show(b.dataset.tab); else if (b.dataset.tab !== 'home') show(b.dataset.tab); });
+  });
+  setInterval(function () { if (!$('rush').hidden) renderRush(); refreshRushCard(); }, 30000);
+  // The game may open a Rush Hour on launch too (never during the self-test or demo).
+  setTimeout(function () {
+    var check = Shell.buildInfo ? Shell.buildInfo() : Promise.resolve({});
+    check.then(function (bi) {
+      if (bi.selfTest || bi.demo) return;
+      if (!$('home').hidden && $('modal').hidden && maybeStartRush()) rushAnnounce(function () { show('rush'); });
+    });
+  }, 6000);
   document.addEventListener('pointerdown', function (e) {
     // A tap on the open sky behind the home screen lets a lantern go.
     if (e.target === $('bg') && !$('home').hidden) { A.unlock(); if (sky.release(e.clientX, e.clientY) !== false) { A.chime(); buzz(8); } return; }
@@ -1756,7 +1864,7 @@
     if (!$('modal').hidden) { if (modal.back) modal.back(); else closeModal(); return true; }
     if (!$('game').hidden) { $('btn-quit').click(); return true; }
     if (!$('friends').hidden) { openLobby(); return true; }
-    if (!$('levels').hidden || !$('lobby').hidden) { if (!$('lobby').hidden) Net.close(); show('home'); return true; }
+    if (!$('levels').hidden || !$('lobby').hidden || !$('shop').hidden || !$('rush').hidden || !$('ranks').hidden) { if (!$('lobby').hidden) Net.close(); show('home'); return true; }
     return false;
   });
   window.addEventListener('pointerdown', function () { A.unlock(); }, { once: true });

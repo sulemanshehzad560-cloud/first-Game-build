@@ -217,14 +217,14 @@ await step('vs computer', async () => {
 await step('tile sets and back button', async () => {
   await page.evaluate(() => document.getElementById('btn-themes').click());
   await sleep(900); await shot('08-tile-sets');
-  log(await page.evaluate(() => !document.getElementById('modal').hidden), 'Tile sets dialog open');
-  const waitClosed = () => page.waitForFunction(() => document.getElementById('modal').hidden, null, { timeout: 5000 }).then(() => true, () => false);
+  log(await page.evaluate(() => !document.getElementById('shop').hidden && document.querySelectorAll('.theme-card').length > 0), 'Shop screen open');
+  const waitClosed = () => page.waitForFunction(() => !document.getElementById('home').hidden, null, { timeout: 5000 }).then(() => true, () => false);
   if (!(await ensureFocus())) console.log('   could not give the game focus: ' + focusLine());
   await device.shell('input keyevent 4');
   // the emulator renders in software, so give the dialog up to five seconds to go
   const closed = await waitClosed();
   if (!closed) console.log('   back press did not close the dialog; focus: ' + focusLine());
-  log(closed, 'Back button closes dialogs');
+  log(closed, 'Back button returns home from the Shop');
 });
 
 await step('background and resume', async () => {

@@ -114,10 +114,16 @@
     g.font = '700 ' + size + 'px ' + GLYPH_FONT;
     g.fillStyle = color; g.fillText(ch, x, y);
   }
+  // The index in the top-left corner: a big, bold number (or wind letter) so matching never means counting.
   function corner(g, text, color, w, h) {
-    g.font = '800 ' + Math.min(w, h) * 0.17 + 'px "Figtree", system-ui, sans-serif';
+    var size = Math.min(w, h) * 0.3;
+    g.font = '800 ' + size + 'px "Figtree", system-ui, sans-serif';
     g.textAlign = 'left'; g.textBaseline = 'top'; g.fillStyle = color;
-    g.fillText(text, 0, 0);
+    g.fillText(text, -w * 0.02, -h * 0.03);
+  }
+  // Symbols of numbered tiles sit a little down and to the right, clear of the corner number.
+  function inset(g, w, h, fn) {
+    g.save(); g.translate(w * 0.13, h * 0.15); g.scale(0.85, 0.85); fn(); g.restore();
   }
 
   var DOTS = [
@@ -135,9 +141,9 @@
   var DOT_COLORS = [null, [1, 0], [0, 2, 1], [0, 1, 1, 0], [0, 1, 2, 1, 0], [1, 1, 2, 2, 2, 2], [1, 1, 1, 2, 2, 2, 2], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 2, 2, 2, 1, 1, 1]];
   var STICKS = [
     null,
-    [[.5, .27, 0], [.5, .73, 0]],
-    [[.5, .27, 0], [.3, .73, 0], [.7, .73, 0]],
-    [[.3, .27, 0], [.7, .27, 0], [.3, .73, 0], [.7, .73, 0]],
+    [[.5, .27, 2], [.5, .73, 0]],
+    [[.5, .27, 1], [.3, .73, 0], [.7, .73, 0]],
+    [[.3, .27, 2], [.7, .27, 0], [.3, .73, 0], [.7, .73, 2]],
     [[.25, .27, 0], [.75, .27, 0], [.5, .5, 1], [.25, .73, 0], [.75, .73, 0]],
     [[.2, .27, 0], [.5, .27, 0], [.8, .27, 0], [.2, .73, 0], [.5, .73, 0], [.8, .73, 0]],
     [[.5, .17, 1], [.2, .5, 0], [.5, .5, 0], [.8, .5, 0], [.2, .83, 0], [.5, .83, 0], [.8, .83, 0]],
@@ -150,26 +156,32 @@
     var pal = PALETTES[palName] || PALETTES.light, s = Math.min(w, h), cols = [pal.blue, pal.green, pal.red], i;
     if (kind < 9) {
       var n = kind + 1, pts = DOTS[kind];
-      if (n === 1) {
-        coin(g, w / 2, h / 2, s * 0.42, pal.green, pal.red);
-        g.strokeStyle = pal.blue; g.lineWidth = s * 0.03;
-        g.beginPath(); g.arc(w / 2, h / 2, s * 0.47, 0, 6.2832); g.stroke();
-        return;
-      }
-      var r = n <= 4 ? s * 0.19 : n <= 6 ? s * 0.15 : s * 0.12;
-      for (i = 0; i < pts.length; i++) coin(g, pts[i][0] * w, pts[i][1] * h, r, cols[DOT_COLORS[kind][i]]);
+      inset(g, w, h, function () {
+        if (n === 1) {
+          coin(g, w / 2, h / 2, s * 0.42, pal.green, pal.red);
+          g.strokeStyle = pal.blue; g.lineWidth = s * 0.03;
+          g.beginPath(); g.arc(w / 2, h / 2, s * 0.47, 0, 6.2832); g.stroke();
+          return;
+        }
+        var r = n <= 4 ? s * 0.19 : n <= 6 ? s * 0.155 : s * 0.125;
+        for (i = 0; i < pts.length; i++) coin(g, pts[i][0] * w, pts[i][1] * h, r, cols[DOT_COLORS[kind][i]]);
+      });
+      corner(g, String(n), pal.blue, w, h);
     } else if (kind < 18) {
       var b = kind - 9;
-      if (b === 0) { bird(g, w, h, pal); return; }
-      var sw = s * (b >= 7 ? 0.15 : 0.17), sh = h * (b >= 6 ? 0.28 : 0.38);
-      var stickCols = [pal.green, pal.red, pal.blue];
-      STICKS[b].forEach(function (p) { stalk(g, p[0] * w, p[1] * h, sw, sh, stickCols[p[2]]); });
+      inset(g, w, h, function () {
+        if (b === 0) { bird(g, w, h, pal); return; }
+        var sw = s * (b >= 7 ? 0.16 : 0.19), sh = h * (b >= 6 ? 0.29 : 0.4);
+        var stickCols = [pal.green, pal.red, pal.blue];
+        STICKS[b].forEach(function (p) { stalk(g, p[0] * w, p[1] * h, sw, sh, stickCols[p[2]]); });
+      });
+      corner(g, String(b + 1), pal.green, w, h);
     } else if (kind < 27) {
-      glyph(g, NUMERALS[kind - 18], w / 2, h * 0.29, s * 0.5, pal.ink);
-      glyph(g, '萬', w / 2, h * 0.72, s * 0.56, pal.red);
+      glyph(g, NUMERALS[kind - 18], w * 0.58, h * 0.32, s * 0.5, pal.ink);
+      glyph(g, '萬', w / 2, h * 0.73, s * 0.56, pal.red);
       corner(g, String(kind - 17), pal.red, w, h);
     } else if (kind < 31) {
-      glyph(g, WINDS[kind - 27], w / 2, h * 0.54, s * 0.78, pal.ink);
+      glyph(g, WINDS[kind - 27], w * 0.56, h * 0.57, s * 0.72, pal.ink);
       corner(g, 'ESWN'[kind - 27], pal.red, w, h);
     } else if (kind === 31) {
       glyph(g, '中', w / 2, h * 0.52, s * 0.86, pal.red);

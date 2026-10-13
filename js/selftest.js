@@ -83,7 +83,10 @@
       check(document.querySelectorAll('.theme-card').length === 6, 'Shop shows the 6 classic tile sets');
       document.querySelector('.shop-tabs button:last-child').click(); await sleep(900);
       check(document.querySelectorAll('.board-card').length >= 12, 'Shop lists the board designs');
-      document.querySelector('#modal-actions .primary').click();
+      document.querySelector('#tabbar [data-tab="rush"]').click(); await sleep(600);
+      check(!$('rush').hidden && !!$('rush-body').textContent, 'Rush Hour tab opens');
+      document.querySelector('#tabbar [data-tab="home"]').click(); await sleep(600);
+      check(!$('home').hidden, 'Home tab returns home');
     });
     console.log('SELFTEST DONE pass=' + pass + ' fail=' + fail);
   }
@@ -126,7 +129,8 @@
     $('btn-levels').click(); await sleep(4000); back(); await sleep(2000);
     $('btn-daily').click(); await until(boardReady, 15000); await sleep(1500);
     await play(4, 900); $('btn-quit').click(); await sleep(1500); clickText('Quit'); await sleep(2000);
-    $('btn-themes').click(); await sleep(4500); document.querySelector('#modal-actions .primary').click(); await sleep(1500);
+    $('btn-themes').click(); await sleep(4500); document.querySelector('#tabbar [data-tab="rush"]').click(); await sleep(3000);
+    document.querySelector('#tabbar [data-tab="home"]').click(); await sleep(1500);
     $('btn-ai').click(); await sleep(2000);
     document.querySelector('#modal-actions .primary').click(); await until(boardReady, 15000); await sleep(1500);
     await play(5, 1200); await sleep(1500);

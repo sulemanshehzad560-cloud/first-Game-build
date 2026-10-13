@@ -227,11 +227,6 @@
     var r = mulberry32(hash('jade-daily', dateStr));
     return generate(levelSpec(22 + Math.floor(r() * 20)), 'jade-daily-' + dateStr);
   }
-  // Rush Hour: the same seven boards for every player on a given day, each a little harder than the last.
-  var RUSH_LEVELS = [30, 38, 46, 55, 64, 74, 85];
-  function generateRush(dateStr, k) {
-    return generate(levelSpec(RUSH_LEVELS[Math.min(k, RUSH_LEVELS.length - 1)]), 'jade-rush-' + dateStr + '-' + k);
-  }
   function generateDuel(seed, size) {
     var L = size === 'big' ? 26 : 12;
     var spec = levelSpec(L);
@@ -280,7 +275,7 @@
   var api = {
     KINDS: KINDS, Layout: Layout, isFree: isFree, freeTiles: freeTiles, freePairs: freePairs,
     deal: deal, levelSpec: levelSpec, MAX_LEVEL: MAX_LEVEL, generate: generate, generateLevel: generateLevel,
-    generateDaily: generateDaily, generateRush: generateRush, RUSH_BOARDS: RUSH_LEVELS.length, generateDuel: generateDuel, reshuffle: reshuffle,
+    generateDaily: generateDaily, generateDuel: generateDuel, reshuffle: reshuffle,
     points: points, aiPick: aiPick, mulberry32: mulberry32, hash: hash
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

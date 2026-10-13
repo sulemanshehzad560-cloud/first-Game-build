@@ -42,10 +42,22 @@ Leaderboards screen says the service is not set up.
 ## How Rush Hour works
 
 - Opens once a player has cleared level 30.
-- Every day the same 7 boards go to everyone, each harder than the last. Clear them in a row; one fail ends
-  the run. A player gets one rewarded-video revive per run.
-- Score = board scores, plus a speed bonus for fast clears. The best run of the day goes on the Rush Hour
-  leaderboard, and the Rush Hour screen lists the players ranked around you (about 50 on iPhone, 25 on Android,
-  which is Google's page size).
-- Finishing all 7 boards pays 150 coins on top of the coins for each board.
-- The day turns over at 08:00 UTC (midnight Pacific), in step with Google Play's daily leaderboards.
+- The game starts a Rush Hour by itself, at random, while the player plays journey levels (the first one
+  right after unlocking, then about one in three level starts once 1 to 3 hours have passed since the last race).
+- A race lasts 45 minutes: 25 players (the player and 24 computer rivals paced to their level) race to win
+  7 new journey levels in a row. Losing a board, or quitting/restarting one, knocks the player out.
+  A rewarded-video revive keeps the streak alive.
+- Prizes: 500 / 300 / 200 coins for 1st / 2nd / 3rd, 100 for every other finisher.
+- The "Rush Hour" leaderboard counts how many Rush Hours each player has finished.
+
+## Sign-in for everyone
+
+While Play Games Services and the Google Cloud OAuth consent screen are in **Testing**, only listed testers can
+sign in (others see "Error 403: access_denied"). For everyone to be signed in automatically on launch:
+
+1. Play Console -> Play Games Services -> Configuration -> **Review and publish -> Publish**.
+2. console.cloud.google.com -> project **jade-rush** -> Google Auth Platform -> **Audience** ->
+   **Publish app** (status "In production"). The game only asks for basic Play Games access, so Google does not
+   need to verify the app.
+
+Players without a Play Games profile, or who decline, keep playing normally; their progress stays on the phone.

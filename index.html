@@ -23,7 +23,6 @@
         <span class="star-pill streak-pill" id="home-streak" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 21c-3.6 0-6-2.4-6-5.7 0-3.4 3-5.1 3.6-8.8 2.5 1.2 3.4 3.4 3.4 5 .9-.6 1.6-1.6 1.8-3 1.9 1.4 3.2 3.9 3.2 6.8 0 3.3-2.4 5.7-6 5.7z"/></svg><span></span></span>
       </div>
       <div class="home-top-actions">
-        <button id="btn-ranks" class="round-btn" aria-label="Leaderboards"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5v1.5A3 3 0 0 0 8 10.4M16 6h3v1.5a3 3 0 0 1-3 2.9M12 13v4M8.5 20h7M10 17h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button id="btn-howto" class="round-btn" aria-label="How to play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 9a3 3 0 1 1 4.3 2.7c-.9.4-1.5 1.2-1.5 2.2v.6M12 18h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
         <button id="btn-settings" class="round-btn" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
       </div>
@@ -159,6 +158,36 @@
     </div>
   </section>
 
+  <!-- SHOP -->
+  <section id="shop" class="screen tab-screen" hidden>
+    <header class="bar">
+      <span class="bar-side bar-left" id="shop-stars">★ 0</span>
+      <h2 class="bar-title"><small>Tile sets &amp; tables</small>Shop</h2>
+      <span class="star-pill coin-pill" id="shop-coins"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.6"/></svg><span>0</span></span>
+    </header>
+    <div class="tab-scroll" id="shop-body"></div>
+  </section>
+
+  <!-- RUSH HOUR -->
+  <section id="rush" class="screen tab-screen" hidden>
+    <header class="bar">
+      <span class="bar-side bar-left"></span>
+      <h2 class="bar-title"><small id="rush-sub">Win streak race</small>Rush Hour</h2>
+      <span class="bar-side" id="rush-clock"></span>
+    </header>
+    <div class="tab-scroll" id="rush-body"></div>
+  </section>
+
+  <!-- LEADERBOARDS -->
+  <section id="ranks" class="screen tab-screen" hidden>
+    <header class="bar">
+      <span class="bar-side bar-left"></span>
+      <h2 class="bar-title"><small id="ranks-sub">Players worldwide</small>Leaderboards</h2>
+      <span class="bar-side"></span>
+    </header>
+    <div class="tab-scroll" id="ranks-body"></div>
+  </section>
+
   <!-- GAME -->
   <section id="game" class="screen" hidden>
     <header class="bar">
@@ -207,6 +236,14 @@
       </div>
     </div>
   </section>
+
+  <nav id="tabbar" class="tabbar" aria-label="Main">
+    <button data-tab="home" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5.5v-5h-5v5H4z"/></svg><span>Home</span></button>
+    <button data-tab="levels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Zm0 0v14m6-12v14"/></svg><span>Levels</span></button>
+    <button data-tab="rush" class="tab-rush"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 2 5 13.5h6L9.5 22 19 9.5h-6.2L13.5 2Z"/></svg><span>Rush</span><i class="tab-dot" id="tab-rush-dot" hidden></i></button>
+    <button data-tab="shop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8Zm3.5 0V6.5a3.5 3.5 0 0 1 7 0V8"/></svg><span>Shop</span></button>
+    <button data-tab="ranks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5v1.5A3 3 0 0 0 8 10.4M16 6h3v1.5a3 3 0 0 1-3 2.9M12 13v4M8.5 20h7M10 17h4"/></svg><span>Ranks</span></button>
+  </nav>
 </main>
 
 <div id="modal" class="modal" hidden>
