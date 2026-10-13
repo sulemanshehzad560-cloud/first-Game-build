@@ -57,6 +57,13 @@ jobs:
       - name: Game engine tests
         run: npm test
 
+      - name: Live Rush Hour backend (Firebase)
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/fb" && (cd "$RUNNER_TEMP/fb" && npm init -y >/dev/null && npm i -q firebase@13.0.0 >/dev/null)
+          mkdir -p "$RUNNER_TEMP/fb/js" && cp ci/live-check.mjs "$RUNNER_TEMP/fb/" && cp js/live-config.js "$RUNNER_TEMP/fb/js/"
+          cd "$RUNNER_TEMP/fb" && node live-check.mjs
+
       - name: Copy web game into the Android project
         run: npm run build && npx cap sync android
 
