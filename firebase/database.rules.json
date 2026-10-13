@@ -1,0 +1,34 @@
+{
+  "rules": {
+    "rush": {
+      "open": {
+        "$bracket": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['id', 'created', 'count']) && newData.child('count').isNumber() && newData.child('count').val() <= 25 && newData.child('created').val() <= now + 60000"
+        }
+      },
+      "races": {
+        "$race": {
+          ".read": "auth != null",
+          "meta": {
+            ".write": "auth != null && !data.exists()",
+            ".validate": "newData.hasChildren(['bracket', 'created', 'end'])"
+          },
+          "players": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid",
+              ".validate": "newData.hasChildren(['name', 'streak', 'out']) && newData.child('streak').isNumber() && newData.child('streak').val() >= 0 && newData.child('streak').val() <= 7 && (!data.exists() || newData.child('streak').val() >= data.child('streak').val() || data.child('out').val() === true || newData.child('out').val() === true) && (!data.child('out').exists() || data.child('out').val() === false || newData.child('out').val() === true)",
+              "name": { ".validate": "newData.isString() && newData.val().length <= 24" },
+              "streak": { ".validate": "newData.isNumber()" },
+              "out": { ".validate": "newData.isBoolean()" },
+              "doneAt": { ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() <= now)" },
+              "joined": { ".validate": "newData.isNumber() && newData.val() <= now" },
+              "$other": { ".validate": false }
+            }
+          }
+        }
+      }
+    }
+  }
+}

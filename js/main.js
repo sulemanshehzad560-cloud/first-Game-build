@@ -16,7 +16,8 @@
     coins: 150, owned: [], board: 'table', adProgress: {}, freeCoins: { day: '', n: 0 },
     race: null, rushWins: 0, rushBest: 0, rushCount: 0, rushNext: 0 };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
-  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
+  // Keys starting with "_" are runtime caches (race rivals, live players) and never saved.
+  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store, function (k, v) { return k.charAt(0) === '_' ? undefined : v; })); } catch (e) { /* storage unavailable */ } }
   function totalStars() { var s = 0; for (var k in store.stars) s += store.stars[k]; return s; }
   function dayKey(offset) { var d = new Date(Date.now() + (offset || 0) * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function fmtTime(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
@@ -706,8 +707,9 @@
   // ------------------------------------------------------------- Rush Hour
   // From level 30 the game itself starts a Rush Hour now and then while you play: a 45-minute race
   // against 24 rivals at your level. Win 7 journey levels in a row; one lost board knocks you out.
-  // The first three to 7 wins take the big prizes. Rivals are computer players paced to your level
-  // (there is no game server), seeded so a race reads the same every time you look.
+  // The first three to 7 wins take the big prizes. Real players at a similar level race live through
+  // js/live.js (Firebase); any empty seats are filled by computer rivals paced to the level, seeded by the
+  // race so every player in it sees the same ones.
   var RUSH_FROM = 30, RUSH_WINS = 7, RUSH_MIN = 45, RUSH_RIVALS = 24, RUSH_PRIZES = [500, 300, 200], RUSH_FINISH = 100;
   var RIVAL_NAMES = ['Mei', 'LotusKing', 'Arjun', 'Sofia_K', 'TileMaster', 'Hiro', 'Amira', 'Lucas77', 'ZenPanda', 'Fatima', 'Kenji', 'Olivia',
     'Omar.J', 'Priya', 'ChenWei', 'AvaRose', 'Ali_99', 'Noah', 'Yuki', 'Elena', 'Bilal', 'Mateo', 'Hana', 'Zara', 'Diego', 'Aisha', 'Leo_M',
@@ -737,11 +739,16 @@
   function raceLive(race) { return !!race && Date.now() < race.end; }
   /** Everyone's standing at a moment: finished first (by finish time), then most wins, the knocked out last. */
   function raceStandings(race, at) {
-    var m = raceMinutes(race, Math.min(at || Date.now(), race.end)), rows = rushRivals(race).map(function (v) {
+    var m = raceMinutes(race, Math.min(at || Date.now(), race.end)), live = race._players || [];
+    var seats = Math.max(0, RUSH_RIVALS - live.length);
+    var rows = rushRivals(race).slice(0, seats).map(function (v) {
       var w = v.wins.filter(function (t) { return t <= m; }).length, done = w >= RUSH_WINS ? v.wins[RUSH_WINS - 1] : 0;
-      return { name: v.name, color: v.color, wins: w, done: done, out: !!(v.outAt && v.outAt <= m) };
+      return { name: v.name, color: v.color, wins: w, done: done, out: !!(v.outAt && v.outAt <= m), cpu: true };
     });
-    rows.push({ name: GS.state.signedIn && GS.state.name ? GS.state.name : 'You', me: true, color: '#ffc46a', wins: race.streak,
+    live.forEach(function (p, i) {
+      rows.push({ name: p.name, color: AV_COLORS[(i + 3) % AV_COLORS.length], wins: p.streak, done: p.doneAt ? raceMinutes(race, p.doneAt) : 0, out: p.out, real: true });
+    });
+    rows.push({ name: playerName(), me: true, color: '#ffc46a', wins: race.streak,
       done: race.doneAt ? raceMinutes(race, race.doneAt) : 0, out: race.out });
     rows.sort(function (a, b) {
       if (!!a.done !== !!b.done) return a.done ? -1 : 1;
@@ -772,7 +779,39 @@
     store.race = { id: now, seed: (now ^ 0x5bd1e995) >>> 0, start: now, end: now + RUSH_MIN * 60000, streak: 0, out: false, doneAt: 0, prize: 0 };
     store.rushCount = (store.rushCount || 0) + 1;
     save();
+    goLive(store.race);
     return true;
+  }
+  // ---- live races (js/live.js): join real players at a similar level
+  var Live = window.LiveRush || { available: function () { return false; } }, stopWatch = null;
+  function rushBracket() { var L = store.done ? MAX : store.level; return L < 100 ? 'b1' : L < 300 ? 'b2' : L < 1000 ? 'b3' : L < 2500 ? 'b4' : 'b5'; }
+  function playerName() {
+    if (GS.state.signedIn && GS.state.name) return GS.state.name;
+    if (!store.playerName) { store.playerName = 'Player ' + (1000 + Math.floor(Math.random() * 9000)); save(); }
+    return store.playerName;
+  }
+  function seedOf(str) { var h = 2166136261; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function goLive(race) {
+    if (!Live.available()) return;
+    Live.join(rushBracket(), playerName()).then(function (info) {
+      if (store.race !== race) return;
+      // Adopt the shared race: same clock and the same computer rivals for everyone in it.
+      race.live = info.id; race.start = info.start; race.end = info.end; race.seed = seedOf(info.id); delete race._rivals;
+      if (race.streak || race.out) Live.report(race.live, { streak: race.streak, out: race.out, done: !!race.doneAt });
+      save(); watchRace(race); rushRefresh();
+    }, function () { /* offline or not configured: this race stays against computer rivals */ });
+  }
+  function watchRace(race) {
+    if (stopWatch) stopWatch();
+    stopWatch = null;
+    if (!race || !race.live || !raceLive(race)) return;
+    stopWatch = Live.watch(race.live, function (players) { if (store.race !== race) return; race._players = players; rushRefresh(); });
+  }
+  function rushRefresh() {
+    refreshRushCard();
+    if (!$('rush').hidden) renderRush();
+    var ann = document.querySelector('#modal-body .race-list');
+    if (ann && store.race) ann.replaceWith(raceList(store.race, 5));
   }
   function rushAnnounce(then) {
     var box = document.createElement('div');
@@ -795,6 +834,8 @@
       li.innerHTML = '<b>' + (i + 1) + '</b><span class="av"></span><span class="nm"></span>' + (r.done ? '<span class="done">✓ 7</span>' : r.out ? '<span class="done" style="color:#ff9a8a">out</span>' : '<span class="pips">' + pips + '</span>');
       li.querySelector('.av').textContent = r.name.charAt(0).toUpperCase(); li.querySelector('.av').style.background = r.color;
       li.querySelector('.nm').textContent = r.me && r.name !== 'You' ? r.name + ' (you)' : r.name;
+      if (r.cpu) { var tag = document.createElement('small'); tag.className = 'cpu-tag'; tag.textContent = 'CPU'; li.querySelector('.nm').appendChild(tag); }
+      if (r.real) li.querySelector('.av').classList.add('live');
       ol.appendChild(li);
     });
     return ol;
@@ -803,12 +844,13 @@
   function rushResult(won) {
     var race = store.race;
     if (!raceLive(race) || race.out || race.doneAt) return null;
-    if (!won) { race.out = true; save(); return 'Rush Hour: one lost board and you are out of this race (' + race.streak + ' / ' + RUSH_WINS + ').'; }
+    if (!won) { race.out = true; save(); if (race.live) Live.report(race.live, { streak: race.streak, out: true }); return 'Rush Hour: one lost board and you are out of this race (' + race.streak + ' / ' + RUSH_WINS + ').'; }
     race.streak++;
     if (race.streak >= RUSH_WINS) {
       race.doneAt = Date.now();
       var place = racePlace(race), prize = place <= 3 ? RUSH_PRIZES[place - 1] : RUSH_FINISH;
       race.prize = prize; addCoins(prize);
+      if (race.live) Live.report(race.live, { streak: race.streak, out: false, done: true });
       store.rushWins = (store.rushWins || 0) + 1;
       store.rushBest = Math.min(store.rushBest || 99, place);
       save();
@@ -817,6 +859,7 @@
       return '⚡ Rush Hour complete: ' + ordinal(place) + ' of ' + (RUSH_RIVALS + 1) + '! +' + prize + ' coins';
     }
     save();
+    if (race.live) Live.report(race.live, { streak: race.streak, out: false });
     return '⚡ Rush Hour: ' + race.streak + ' / ' + RUSH_WINS + ' wins in a row · ' + ordinal(racePlace(race)) + ' place';
   }
   function rushNoteEl(text) { var d = document.createElement('div'); d.className = 'rush-banner'; d.innerHTML = '<b>⚡</b><span></span>'; d.lastChild.textContent = text.replace(/^⚡ /, ''); return d; }
@@ -905,7 +948,9 @@
           'Win ' + (RUSH_WINS - race.streak) + ' more level' + (RUSH_WINS - race.streak === 1 ? '' : 's') + ' in a row. Ends in ' + fmtLeft(race.end - Date.now()) + '.')
           : 'You placed ' + ordinal(race.finalPlace || racePlace(race)) + ' of ' + (RUSH_RIVALS + 1) + (race.prize ? ' and won ' + race.prize + ' coins.' : '.'));
       c1.appendChild(raceList(race));
-      var foot = document.createElement('p'); foot.className = 'race-foot'; foot.textContent = 'Rivals are computer players matched to your level.';
+      var realN = (race._players || []).length, foot = document.createElement('p'); foot.className = 'race-foot';
+      foot.textContent = race.live ? (realN ? realN + ' real player' + (realN === 1 ? '' : 's') + ' racing live with you' : 'Live race: waiting for players at your level to join') +
+        (RUSH_RIVALS - realN > 0 ? ' · empty seats filled by CPU rivals' : '') : 'Offline race against CPU rivals matched to your level.';
       c1.appendChild(foot);
       if (live && !race.out && !race.doneAt) {
         var go = document.createElement('button'); go.type = 'button'; go.className = 'primary'; go.innerHTML = icon('play', 20) + '<span></span>';
@@ -1802,6 +1847,7 @@
     b.addEventListener('click', function () { A.select(); if ($(b.dataset.tab).hidden) show(b.dataset.tab); else if (b.dataset.tab !== 'home') show(b.dataset.tab); });
   });
   setInterval(function () { if (!$('rush').hidden) renderRush(); refreshRushCard(); }, 30000);
+  if (store.race && store.race.live) watchRace(store.race);   // back in a live race after a restart
   // The game may open a Rush Hour on launch too (never during the self-test or demo).
   setTimeout(function () {
     var check = Shell.buildInfo ? Shell.buildInfo() : Promise.resolve({});

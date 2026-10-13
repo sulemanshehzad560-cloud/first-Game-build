@@ -858,3 +858,5 @@ body.tabs-on #app { padding-bottom: calc(var(--sa-bottom) + 78px); }
 .rush-banner b { color: #ffc46a; }
 .shop-screen-head { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 body.tabs-on .toast { bottom: calc(var(--sa-bottom) + 92px); }
+.cpu-tag { margin-left: 6px; padding: 1px 5px; border-radius: 5px; font: 800 9.5px/1.4 var(--font-body); letter-spacing: .06em; color: rgba(255,244,222,.6); background: rgba(255,244,222,.1); vertical-align: 2px; }
+.race-list .av.live { box-shadow: 0 0 0 2px #7fe0a4, 0 0 10px rgba(127,224,164,.6); }
