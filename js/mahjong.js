@@ -177,8 +177,8 @@
       carve: 0.08,
       stack: L < 6 ? 0.6 : Math.min(0.95, 0.85 + tail * 0.1),
       secPerTile: L <= 42 ? Math.max(1.5, 3.6 - L * 0.05) : +(1.5 - tail * 0.35).toFixed(3),
-      shuffles: L < 8 ? 3 : L < 20 ? 2 : 1,
-      hints: L < 8 ? 3 : L < 20 ? 2 : 1,
+      shuffles: 2,   // every level: 3 hints + 2 shuffles; more come from Rush Hour prizes and videos
+      hints: 3,
       showFree: L <= 500   // blocked tiles are dimmed up to level 500
     };
   }

@@ -860,3 +860,21 @@ body.tabs-on #app { padding-bottom: calc(var(--sa-bottom) + 78px); }
 body.tabs-on .toast { bottom: calc(var(--sa-bottom) + 92px); }
 .cpu-tag { margin-left: 6px; padding: 1px 5px; border-radius: 5px; font: 800 9.5px/1.4 var(--font-body); letter-spacing: .06em; color: rgba(255,244,222,.6); background: rgba(255,244,222,.1); vertical-align: 2px; }
 .race-list .av.live { box-shadow: 0 0 0 2px #7fe0a4, 0 0 10px rgba(127,224,164,.6); }
+.result-total { display: grid; justify-items: center; gap: 2px; margin: 0 0 12px; }
+.result-total small { font: 800 11px/1 var(--font-body); letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.result-total b { font: 800 44px/1.05 var(--font-display); color: #fff3d6; font-variant-numeric: tabular-nums; text-shadow: 0 0 22px var(--accent-glow), 0 3px 0 rgba(0,0,0,.35); }
+#modal-actions button { white-space: nowrap; }
+.ad-count { display: grid; place-items: center; margin: 4px 0 2px; }
+.ad-count span { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; font: 800 26px/1 var(--font-display); color: #3a2200;
+  background: radial-gradient(circle at 35% 30%, #fff3cf, var(--gold) 55%, var(--gold-2)); box-shadow: 0 0 18px -2px var(--accent-glow); }
+
+/* ---------- battery saver / low-memory phones ---------- */
+/* Background blur is the most expensive effect in a WebView: swap it for solid panels, and stop the
+   looping decorative animations. */
+body.lite * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+body.lite .duel-card, body.lite .tab-card, body.lite .tabbar, body.lite .sheet { background-color: rgba(14,10,20,.94); }
+body.lite .rush-card .rush-bolt, body.lite .tab-dot, body.lite .cta-play, body.lite .lvl.current { animation: none !important; }
+body.lite .float, body.lite .banner { text-shadow: none; }
+/* small phones: keep one-line labels on one line */
+.tagline { white-space: nowrap; font-size: clamp(9.5px, 2.9vw, 12.5px); }
+.rush-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

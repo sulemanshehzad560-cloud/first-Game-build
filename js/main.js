@@ -14,7 +14,7 @@
   var SAVE_KEY = 'jaderush.v1';
   var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true, done: false, music: true, ambience: true,
     coins: 150, owned: [], board: 'table', adProgress: {}, freeCoins: { day: '', n: 0 },
-    race: null, rushWins: 0, rushBest: 0, rushCount: 0, rushNext: 0 };
+    race: null, rushWins: 0, rushBest: 0, rushCount: 0, rushNext: 0, bank: { hints: 0, shuffles: 0 } };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   // Keys starting with "_" are runtime caches (race rivals, live players) and never saved.
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store, function (k, v) { return k.charAt(0) === '_' ? undefined : v; })); } catch (e) { /* storage unavailable */ } }
@@ -26,8 +26,14 @@
   Music.setMusic(store.music !== false); Music.setAmbience(store.ambience !== false);
 
   // Battery saver: automatic on phones with 2 GB of RAM or less (or 2 cores), or switched on in Settings.
-  function autoLite() { return (navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2); }
+  // Battery saver ("lite"): on by default for phones with 3 GB of memory or less, or 4 cores or fewer.
+  function autoLite() { return (navigator.deviceMemory && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4); }
   window.JadeLite = store.lite == null ? !!autoLite() : !!store.lite;
+  document.body.classList.toggle('lite', window.JadeLite);
+  function setLite(v) {
+    window.JadeLite = v; document.body.classList.toggle('lite', v);
+    if (typeof refreshSkyHint === 'function') { refreshSkyHint(); board.resize(); demo.resize(); sky.resize(); }
+  }
 
   // ------------------------------------------------------------- tile sets, juice
   var THEMES = window.MahjongTiles.THEMES, TILESETS = window.MahjongTiles.TILESETS;
@@ -432,7 +438,7 @@
       if (a.icon) b.innerHTML = icon(a.icon, a.primary ? 22 : 20) + '<span></span>';
       (a.icon ? b.lastChild : b).textContent = a.label;
       var run = a.run;
-      if (opts.adGate != null && run) run = function () { Ads.between(opts.adGate, a.run); };
+      if (opts.adGate != null && run) run = function () { Ads.between(opts.adGate, a.run, { intro: adIntro, onReward: function () { addBank(1, 0); toast('+1 bonus hint saved for later', 2000); } }); };
       b.addEventListener('click', function () { closeModal(); if (run) run(); });
       act.appendChild(b);
     });
@@ -588,13 +594,22 @@
   }
   function startDaily() { startTimed(M.generateDaily(dayKey()), { mode: 'daily', title: 'Daily board' }); }
 
+  // Every level gives 3 hints and 2 shuffles. Extras live in a bank filled by Rush Hour prizes and videos,
+  // and are spent once the level's own run out. The online race keeps its fixed allowance.
+  function bank() { var b = store.bank || (store.bank = { hints: 0, shuffles: 0 }); return b; }
+  function usesBank() { return !G.limit && G.duel !== 'race'; }
+  function hintsLeft() { return G.hints + (usesBank() ? bank().hints : 0); }
+  function shufflesLeft() { return G.shuffles + (usesBank() ? bank().shuffles : 0); }
+  function addBank(h, s) { var b = bank(); b.hints += h || 0; b.shuffles += s || 0; save(); if (G.lay && !G.over) updateTimedHud(); }
   function updateTimedHud() {
     var cb = $('combo'), c = Math.max(1, G.combo);
     if (cb.textContent !== '×' + c) { cb.textContent = '×' + c; if (c > 1) bump(cb); }
     cb.className = c >= 10 ? 't4' : c >= 7 ? 't3' : c >= 5 ? 't2' : c >= 3 ? 't1' : '';
     if ($('left').textContent !== String(G.left)) { $('left').textContent = G.left; bump($('left')); }
-    $('hint-count').textContent = G.hints; $('btn-hint').disabled = G.hints <= 0;
-    $('shuffle-count').textContent = G.shuffles; $('btn-shuffle').disabled = G.shuffles <= 0;
+    // Out of both: the badge shows "+" and a tap offers a video (the online race just runs out).
+    var hl = hintsLeft(), sl = shufflesLeft();
+    $('hint-count').textContent = hl || (usesBank() ? '+' : 0); $('btn-hint').disabled = hl <= 0 && !usesBank();
+    $('shuffle-count').textContent = sl || (usesBank() ? '+' : 0); $('btn-shuffle').disabled = sl <= 0 && !usesBank();
     if (G.duel === 'race') {
       var n = G.lay.n;
       $('rival-fill').style.width = (100 * (n - G.rival.left) / n) + '%';
@@ -634,9 +649,15 @@
     $('btn-shuffle').classList.remove('attention');
     if (G.duel === 'race') Net.send({ t: 'prog', left: G.left, score: G.score });
     updateTimedHud();
-    if (G.left === 0) { timedWin(); return; }
+    if (G.left === 0) {
+      // A short "cleared" moment on the empty table before the results card.
+      var g = G; G.over = true; G.clearing = true;
+      banner('Board cleared!'); confetti.burst(60); buzz([20, 40, 20]);
+      setTimeout(function () { if (G === g) { G.over = false; timedWin(); } }, 950);
+      return;
+    }
     if (!M.freePairs(G.lay, G.present, G.kinds).length) {
-      if (G.shuffles > 0) { toast('No moves left. Shuffle!'); $('btn-shuffle').classList.add('attention'); }
+      if (shufflesLeft() > 0) { toast('No moves left. Shuffle!'); $('btn-shuffle').classList.add('attention'); }
       else if (G.limit) timedFail('No moves left');
       else stuck();
     }
@@ -645,13 +666,27 @@
   // ------------------------------------------------------------- rewarded videos
   /** Offer a rewarded video; resolves true when the player earned the reward. */
   function watchAd() {
-    if (!Ads.rewardedReady || !Ads.rewardedReady()) {
-      toast('No video available right now. Try again in a moment.', 2600);
-      if (Ads.showRewarded) Ads.showRewarded();   // starts loading one
+    if (!Ads.showRewarded || (Ads.available && !Ads.available())) {
+      toast(Shell.isNative ? 'Videos are not available right now. Check your connection.' : 'Videos play in the Android and iPhone apps.', 2600);
       return Promise.resolve(false);
     }
-    G.paused = true;
-    return Ads.showRewarded().then(function (ok) { G.paused = false; if (!ok) toast('Watch the whole video to get the reward.'); return ok; });
+    var wasPaused = G.paused; G.paused = true;
+    if (!Ads.rewardedReady()) toast('Loading video…', 8000);
+    return Ads.showRewarded().then(function (ok) {
+      G.paused = wasPaused; $('toast').hidden = true;
+      if (!ok) toast(Ads.rewardedReady() ? 'Watch the whole video to get the reward.' : 'No video right now. Try again in a minute.', 2600);
+      return ok;
+    });
+  }
+  /** AdMob's required intro before a rewarded interstitial: what it pays, a countdown, and a way out. */
+  function adIntro(cb) {
+    var n = 3, decided = false, body = document.createElement('div');
+    body.innerHTML = '<p class="revive-note">Watch a short ad and get <b>+1 bonus hint</b> for later levels.</p><div class="ad-count"><span></span></div>';
+    var num = body.querySelector('.ad-count span'); num.textContent = n;
+    var decide = function (watch) { if (decided) return; decided = true; clearInterval(t); closeModal(); cb(watch); };
+    var t = setInterval(function () { n--; num.textContent = n; if (n <= 0) decide(true); }, 1000);
+    modal({ kind: 'pause', eyebrow: 'Bonus', title: 'Free hint', body: body, back: function () { decide(false); },
+      actions: [{ label: 'No thanks', run: function () { decide(false); } }, { label: 'Watch', icon: 'play', primary: true, run: function () { decide(true); } }] });
   }
   function adLabel(text) { return '\u25B6 ' + text; }
 
@@ -711,6 +746,8 @@
   // js/live.js (Firebase); any empty seats are filled by computer rivals paced to the level, seeded by the
   // race so every player in it sees the same ones.
   var RUSH_FROM = 30, RUSH_WINS = 7, RUSH_MIN = 45, RUSH_RIVALS = 24, RUSH_PRIZES = [500, 300, 200], RUSH_FINISH = 100;
+  // Extra hints / shuffles for the bank, by place (1st, 2nd, 3rd, any other finisher).
+  var RUSH_BANK = [[5, 3], [3, 2], [2, 1], [1, 1]];
   var RIVAL_NAMES = ['Mei', 'LotusKing', 'Arjun', 'Sofia_K', 'TileMaster', 'Hiro', 'Amira', 'Lucas77', 'ZenPanda', 'Fatima', 'Kenji', 'Olivia',
     'Omar.J', 'Priya', 'ChenWei', 'AvaRose', 'Ali_99', 'Noah', 'Yuki', 'Elena', 'Bilal', 'Mateo', 'Hana', 'Zara', 'Diego', 'Aisha', 'Leo_M',
     'Nadia', 'Ravi', 'Lina', 'JadeFox', 'Bamboo88', 'DragonLi', 'Sakura', 'Emma.B', 'Musa', 'Ivan', 'Chloe', 'Tariq', 'Mina', 'Kai', 'Ines',
@@ -817,7 +854,7 @@
     var box = document.createElement('div');
     box.innerHTML = '<p class="revive-note"></p>';
     box.firstChild.textContent = (RUSH_RIVALS + 1) + ' players at your level are racing. Win ' + RUSH_WINS + ' levels in a row within ' + RUSH_MIN +
-      ' minutes. Lose one board and you are out. Top 3 win ' + RUSH_PRIZES.join(' / ') + ' coins; every finisher gets ' + RUSH_FINISH + '.';
+      ' minutes. Lose one board and you are out. Top 3 win ' + RUSH_PRIZES.join(' / ') + ' coins plus bonus hints and shuffles; every finisher gets ' + RUSH_FINISH + ' coins.';
     box.appendChild(raceList(store.race, 5));
     A.win(); buzz([30, 40, 30]);
     modal({ kind: 'result', eyebrow: '⚡ Rush Hour', title: 'A Rush Hour has started!', body: box,
@@ -850,13 +887,14 @@
       race.doneAt = Date.now();
       var place = racePlace(race), prize = place <= 3 ? RUSH_PRIZES[place - 1] : RUSH_FINISH;
       race.prize = prize; addCoins(prize);
+      var extra = RUSH_BANK[Math.min(place, 4) - 1]; race.extra = extra; addBank(extra[0], extra[1]);
       if (race.live) Live.report(race.live, { streak: race.streak, out: false, done: true });
       store.rushWins = (store.rushWins || 0) + 1;
       store.rushBest = Math.min(store.rushBest || 99, place);
       save();
       GS.submit('rush', store.rushWins);
       confetti.burst(320);
-      return '⚡ Rush Hour complete: ' + ordinal(place) + ' of ' + (RUSH_RIVALS + 1) + '! +' + prize + ' coins';
+      return '⚡ Rush Hour complete: ' + ordinal(place) + ' of ' + (RUSH_RIVALS + 1) + '! +' + prize + ' coins, +' + extra[0] + ' hints, +' + extra[1] + ' shuffles';
     }
     save();
     if (race.live) Live.report(race.live, { streak: race.streak, out: false });
@@ -874,10 +912,10 @@
       $('rush-when').textContent = 'from level ' + RUSH_FROM;
       $('rush-meta').textContent = 'Clear level ' + RUSH_FROM + ' to join · ' + Math.min(RUSH_FROM, store.level - 1) + ' / ' + RUSH_FROM;
     } else if (live) {
-      $('rush-when').textContent = 'live · ends in ' + fmtLeft(race.end - Date.now());
+      $('rush-when').textContent = 'live · ' + fmtLeft(race.end - Date.now()) + ' left';
       $('rush-meta').textContent = race.doneAt ? 'Finished ' + ordinal(racePlace(race)) + ' · +' + race.prize + ' coins' : race.out ? 'You are out of this one' : race.streak + ' / ' + RUSH_WINS + ' wins in a row · ' + ordinal(racePlace(race)) + ' place';
     } else {
-      $('rush-when').textContent = 'starts at random';
+      $('rush-when').textContent = 'random';
       $('rush-meta').textContent = 'Keep playing levels: the next race can start any time';
     }
     var t = c.querySelector('.rush-title'); if (t) t.textContent = live ? 'Race in progress' : RUSH_WINS + ' wins in a row, no fails';
@@ -1011,7 +1049,13 @@
     }
     grid = G.limit
       ? resultGrid([['Score', G.score, 'score'], ['Time left', fmtTime(G.timeLeft), 'clock'], ['Best combo', '×' + G.bestCombo, 'combo'], ['Time bonus', '+' + bonus, 'bonus']])
-      : resultGrid([['Score', G.score, 'score'], ['Best combo', '×' + G.bestCombo, 'combo'], ['Clean bonus', '+' + bonus, 'bonus'], ['Coins', '+' + coins, 'coin']]);
+      : resultGrid([['Matches', G.score - bonus, 'score'], ['Clean bonus', '+' + bonus, 'bonus'], ['Best combo', '×' + G.bestCombo, 'combo'], ['Coins', '+' + coins, 'coin']]);
+    if (!G.limit) {   // the total, big, above the breakdown
+      var tw = document.createElement('div'), tot = document.createElement('div');
+      tot.className = 'result-total'; tot.innerHTML = '<small>Total score</small><b></b>';
+      tot.lastChild.textContent = reduced ? fmt(G.score) : '0'; if (!reduced) tot.lastChild.dataset.to = G.score;
+      tw.appendChild(tot); tw.appendChild(grid); grid = tw;
+    }
     if (coins) grid = withDoubleCoins(grid, coins);
     confetti.burst(stars === 3 ? 220 : 120); setHeat(0); buzz([20, 40, 20, 40, 60]);
     if (G.duel === 'race') {
@@ -1093,7 +1137,7 @@
 
   function useHint() {
     if (G.over || isTurns()) return;
-    if (G.hints <= 0) { if (G.limit) toast('No hints left on this board.'); else offerMore('hint'); return; }
+    if (hintsLeft() <= 0) { if (!usesBank()) toast('No hints left on this board.'); else offerMore('hint'); return; }
     var pairs = M.freePairs(G.lay, G.present, G.kinds);
     if (!pairs.length) { toast('No moves left. Shuffle!'); return; }
     var pick = null, sol = G.gen.solution;
@@ -1102,7 +1146,8 @@
       if (G.present[a] && G.present[b] && G.kinds[a] === G.kinds[b] && M.isFree(G.lay, G.present, a) && M.isFree(G.lay, G.present, b)) pick = [a, b];
     }
     pick = pick || pairs[0];
-    G.hints--; G.usedHint = true; G.hintsUsed++;
+    if (G.hints > 0) G.hints--; else { bank().hints--; save(); }
+    G.usedHint = true; G.hintsUsed++;
     board.showHint(pick, 3500);
     if (G.limit) { G.timeLeft = Math.max(1000, G.timeLeft - HINT_COST_MS); toast('Hint used: −10 seconds', 1500); }
     updateTimedHud();
@@ -1110,14 +1155,15 @@
 
   function useShuffle() {
     if (G.over || isTurns()) return;
-    if (G.shuffles <= 0) { if (G.limit) toast('No shuffles left on this board.'); else offerMore('shuffle'); return; }
+    if (shufflesLeft() <= 0) { if (!usesBank()) toast('No shuffles left on this board.'); else offerMore('shuffle'); return; }
     var next = M.reshuffle(G.lay, G.present, G.kinds, Math.random);
     if (!next) { if (G.limit) timedFail('No moves left'); else stuck(); return; }
     var old = G.kinds;
     G.kinds = next; board.kinds = next; G.sel = -1; board.sel = -1; board.hint = []; board.partners = [];
     board.flipFrom(old); buzz([8, 30, 8, 30, 8]);
     G.gen = Object.assign({}, G.gen, { solution: [] });
-    G.shuffles--; G.shufflesUsed++; A.shuffle(); board.invalidate();
+    if (G.shuffles > 0) G.shuffles--; else { bank().shuffles--; save(); }
+    G.shufflesUsed++; A.shuffle(); board.invalidate();
     $('btn-shuffle').classList.remove('attention');
     updateTimedHud();
   }
@@ -1582,8 +1628,8 @@
     box.appendChild(toggleRow('Music', store.music !== false, function (v) { store.music = v; save(); Music.setMusic(v); }, 'music'));
     box.appendChild(toggleRow('Nature sounds', store.ambience !== false, function (v) { store.ambience = v; save(); Music.setAmbience(v); }, 'leaf'));
     box.appendChild(toggleRow('Vibration', store.vibrate, function (v) { store.vibrate = v; save(); buzz(20); }, 'vibrate'));
-    box.appendChild(toggleRow('Battery saver (fewer effects)', window.JadeLite, function (v) {
-      store.lite = v; window.JadeLite = v; save(); refreshSkyHint(); board.resize(); demo.resize(); sky.resize();
+    box.appendChild(toggleRow('Battery saver', window.JadeLite, function (v) {
+      store.lite = v; setLite(v); save();
     }, 'leaf'));
     group('More');
     box.appendChild(linkRow('How to play', function () { closeModal(); howTo(done); }, 'help'));
@@ -1757,7 +1803,7 @@
         '<div class="art art-free"><div class="art-row">' + t('中', 'red ok') + t('發', 'green no') + t('北', 'ok') + '</div><div class="art-top">' + t('西', 'ok') + '</div></div>'],
       ['Chain combos', 'Make your next match within 5 seconds to grow the multiplier, up to ×12.',
         '<div class="art art-combo"><b>×2</b><b>×5</b><b>×9</b><b class="hot">×12</b></div>'],
-      ['Don\'t get stuck', 'No clock: take your time. If no pair is free, shuffle. Out of shuffles? Watch a short video for two more, or the board is lost.',
+      ['Don\'t get stuck', 'No clock: take your time. Every level gives 3 hints and 2 shuffles. Need more? Watch a short video, or win extras in Rush Hour.',
         '<div class="art art-clock"><div class="art-chips"><span>? Hint</span><span>⇄ Shuffle</span><span>▶ +2</span></div></div>'],
       ['Rush Hour', 'From level 30 a Rush Hour starts at random while you play: 25 players race to win 7 levels in a row. Lose one and you are out. Top 3 win big.',
         '<div class="art art-combo"><b>⚡1</b><b>⚡4</b><b class="hot">⚡7</b></div>'],
@@ -1848,6 +1894,9 @@
   });
   setInterval(function () { if (!$('rush').hidden) renderRush(); refreshRushCard(); }, 30000);
   if (store.race && store.race.live) watchRace(store.race);   // back in a live race after a restart
+  if (Shell.isNative && store.lite == null && Shell.buildInfo) Shell.buildInfo().then(function (bi) {
+    if (!window.JadeLite && (bi.lowRam || (bi.ramMb && bi.ramMb < 3600))) setLite(true);
+  });
   // The game may open a Rush Hour on launch too (never during the self-test or demo).
   setTimeout(function () {
     var check = Shell.buildInfo ? Shell.buildInfo() : Promise.resolve({});
@@ -1942,12 +1991,14 @@
     return { music: !inGame ? 'menu' : (G.mode === 'journey' || G.mode === 'daily') && G.duel !== 'race' && !isTurns() ? t : 'duel', ambience: t };
   }
   function loop(now) {
+    // Battery saver: 30 frames a second is plenty for a tile game and halves the work on slow phones.
+    if (window.JadeLite && now - last < 30) { requestAnimationFrame(loop); return; }
     var dt = Math.min(250, now - last); last = now;
     sky.frame(now);
     confetti.frame(dt);
     if (now - lastScene > 500) { lastScene = now; Music.scene(musicScene()); }
     if (!$('home').hidden) { stepDemo(now); demo.frame(now); }
-    if (!$('game').hidden && G.lay && !isTurns() && G.limit) {
+    if (!$('game').hidden && G.lay && !isTurns() && G.score != null) {
       if (G.shownScore !== G.score) {
         G.shownScore += Math.max(1, Math.ceil((G.score - G.shownScore) * 0.18));
         if (G.shownScore > G.score) G.shownScore = G.score;

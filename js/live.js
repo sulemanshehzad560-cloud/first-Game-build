@@ -7,15 +7,27 @@
  */
 (function (global) {
   'use strict';
-  var F = global.FirebaseLive, CFG = global.JADE_FIREBASE || {};
+  var F = null, CFG = global.JADE_FIREBASE || {}, sdk = null;
   var JOIN_WINDOW = 3 * 60000, RACE_MS = 45 * 60000, MAX_PLAYERS = 25;
   var app = null, auth = null, db = null, uid = null, offset = 0, ready = null;
 
-  function available() { CFG = global.JADE_FIREBASE || CFG; return !!(F && CFG.apiKey && CFG.databaseURL); }
+  function available() { CFG = global.JADE_FIREBASE || CFG; return !!(CFG.apiKey && CFG.databaseURL); }
+  // The Firebase bundle (~280 KB) is only loaded when a race needs it, which keeps start-up light on
+  // low-memory phones.
+  function loadSdk() {
+    if (global.FirebaseLive) { F = global.FirebaseLive; return Promise.resolve(); }
+    if (!sdk) sdk = new Promise(function (resolve, reject) {
+      var s = document.createElement('script'); s.src = 'vendor/firebase-live.js'; s.async = true;
+      s.onload = function () { F = global.FirebaseLive; if (F) resolve(); else reject(new Error('no sdk')); };
+      s.onerror = function () { sdk = null; reject(new Error('sdk failed to load')); };
+      document.head.appendChild(s);
+    });
+    return sdk;
+  }
   function init() {
     if (ready) return ready;
     if (!available()) return Promise.reject(new Error('live races not configured'));
-    ready = new Promise(function (resolve, reject) {
+    ready = loadSdk().then(function () { return new Promise(function (resolve, reject) {
       try {
         if (!app) {
           app = F.initializeApp(CFG);
@@ -32,7 +44,7 @@
         var stop = F.onAuthStateChanged(auth, function (u) { if (u) { clearTimeout(timer); uid = u.uid; stop(); resolve(u.uid); } });
         if (!auth.currentUser) F.signInAnonymously(auth).catch(function (e) { clearTimeout(timer); reject(e); });
       } catch (e) { reject(e); }
-    });
+    }); });
     ready.catch(function () { ready = null; });   // try again next time
     return ready;
   }
