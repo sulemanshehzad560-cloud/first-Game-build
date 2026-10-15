@@ -1,0 +1,37 @@
+name: Publish Android AAB
+
+# Publishes the signed AAB from a finished "App builds" run as its own release, without waiting for
+# the emulator or iOS jobs. Run it from the Actions tab with the run ID that built the bundle.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: ID of the App builds run whose "builds" artifact holds the AAB
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: builds
+          path: dist
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release with the AAB only
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          AAB=$(ls dist/*-release.aab | head -1)
+          NAME=$(basename "$AAB" .aab)
+          CODE=$(echo "$NAME" | sed -E 's/.*-([0-9]+)-release$/\1/')
+          gh release create "aab-${CODE}" "$AAB" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Jade Rush Android AAB (build ${CODE})" --notes "Signed release bundle for Google Play: $(basename "$AAB")" --prerelease
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/aab-${CODE}/$(basename "$AAB")"
