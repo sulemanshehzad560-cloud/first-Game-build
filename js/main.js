@@ -916,7 +916,7 @@
       $('rush-meta').textContent = race.doneAt ? 'Finished ' + ordinal(racePlace(race)) + ' · +' + race.prize + ' coins' : race.out ? 'You are out of this one' : race.streak + ' / ' + RUSH_WINS + ' wins in a row · ' + ordinal(racePlace(race)) + ' place';
     } else {
       $('rush-when').textContent = 'random';
-      $('rush-meta').textContent = 'Keep playing levels: the next race can start any time';
+      $('rush-meta').textContent = 'Keep winning: a race can start any time';
     }
     var t = c.querySelector('.rush-title'); if (t) t.textContent = live ? 'Race in progress' : RUSH_WINS + ' wins in a row, no fails';
   }
