@@ -47,7 +47,8 @@ Leaderboards screen says the service is not set up.
 - A race lasts 45 minutes: 25 players (the player and 24 computer rivals paced to their level) race to win
   7 new journey levels in a row. Losing a board, or quitting/restarting one, knocks the player out.
   A rewarded-video revive keeps the streak alive.
-- Prizes: 500 / 300 / 200 coins for 1st / 2nd / 3rd, 100 for every other finisher.
+- Prizes: 500 / 300 / 200 coins for 1st / 2nd / 3rd, 100 for every other finisher, plus bonus hints and shuffles
+  (+5/+3, +3/+2, +2/+1, +1/+1).
 - The "Rush Hour" leaderboard counts how many Rush Hours each player has finished.
 
 ## Sign-in for everyone

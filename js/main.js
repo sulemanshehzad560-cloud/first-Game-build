@@ -14,7 +14,7 @@
   var SAVE_KEY = 'jaderush.v1';
   var store = { level: 1, stars: {}, best: {}, sound: true, daily: {}, streak: { last: '', n: 0 }, wins: { ai: 0, online: 0 }, aiLevel: 1, duel: 'race', size: 'small', seenHowto: false, theme: 'jade', vibrate: true, done: false, music: true, ambience: true,
     coins: 150, owned: [], board: 'table', adProgress: {}, freeCoins: { day: '', n: 0 },
-    race: null, rushWins: 0, rushBest: 0, rushCount: 0, rushNext: 0, bank: { hints: 0, shuffles: 0 } };
+    race: null, rushWins: 0, rushBest: 0, rushCount: 0, rushNext: 0, bank: { hints: 0, shuffles: 0 }, starterGiven: false };
   try { Object.assign(store, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   // Keys starting with "_" are runtime caches (race rivals, live players) and never saved.
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store, function (k, v) { return k.charAt(0) === '_' ? undefined : v; })); } catch (e) { /* storage unavailable */ } }
@@ -562,8 +562,9 @@
       // when no moves remain and no shuffles are left (a rewarded video can add shuffles).
       limit: cfg.duel === 'race' ? Math.round(gen.layout.n * gen.spec.secPerTile) * 1000 : 0,
       shufflesUsed: 0, hintsUsed: 0, revived: false,
-      hints: cfg.duel === 'race' ? 1 : gen.spec.hints,
-      shuffles: cfg.duel === 'race' ? 2 : gen.spec.shuffles,
+      // Hints and shuffles come from the player's bank (a starter pack, then earned); the online race has its own.
+      hints: cfg.duel === 'race' ? 1 : 0,
+      shuffles: cfg.duel === 'race' ? 2 : 0,
       rival: { left: gen.layout.n, done: false, out: false, score: 0 }
     });
     G.timeLeft = G.limit;
@@ -594,9 +595,15 @@
   }
   function startDaily() { startTimed(M.generateDaily(dayKey()), { mode: 'daily', title: 'Daily board' }); }
 
-  // Every level gives 3 hints and 2 shuffles. Extras live in a bank filled by Rush Hour prizes and videos,
-  // and are spent once the level's own run out. The online race keeps its fixed allowance.
-  function bank() { var b = store.bank || (store.bank = { hints: 0, shuffles: 0 }); return b; }
+  // Hints and shuffles live in one bank that carries across levels: a starter pack of 3 hints and 2 shuffles
+  // when the game starts, then earned by winning (3-star clears, every 10th level, the daily board, Rush Hour)
+  // or by watching a video. The online race keeps its own fixed allowance.
+  var STARTER = { hints: 3, shuffles: 2 };
+  function bank() {
+    var b = store.bank || (store.bank = { hints: 0, shuffles: 0 });
+    if (!store.starterGiven) { store.starterGiven = true; b.hints += STARTER.hints; b.shuffles += STARTER.shuffles; save(); }
+    return b;
+  }
   function usesBank() { return !G.limit && G.duel !== 'race'; }
   function hintsLeft() { return G.hints + (usesBank() ? bank().hints : 0); }
   function shufflesLeft() { return G.shuffles + (usesBank() ? bank().shuffles : 0); }
@@ -850,16 +857,36 @@
     var ann = document.querySelector('#modal-body .race-list');
     if (ann && store.race) ann.replaceWith(raceList(store.race, 5));
   }
+  // The race-start pop-up: players gather ("matchmaking"), then the line-up and the rules.
   function rushAnnounce(then) {
-    var box = document.createElement('div');
-    box.innerHTML = '<p class="revive-note"></p>';
-    box.firstChild.textContent = (RUSH_RIVALS + 1) + ' players at your level are racing. Win ' + RUSH_WINS + ' levels in a row within ' + RUSH_MIN +
-      ' minutes. Lose one board and you are out. Top 3 win ' + RUSH_PRIZES.join(' / ') + ' coins plus bonus hints and shuffles; every finisher gets ' + RUSH_FINISH + ' coins.';
-    box.appendChild(raceList(store.race, 5));
+    var race = store.race, total = RUSH_RIVALS + 1, box = document.createElement('div');
+    box.className = 'match-box';
+    box.innerHTML = '<div class="match-ring"><b>1</b><small>of ' + total + '</small></div><p class="match-status">Finding players at your level…</p><div class="match-faces"></div>';
+    var num = box.querySelector('.match-ring b'), status = box.querySelector('.match-status'), faces = box.querySelector('.match-faces');
     A.win(); buzz([30, 40, 30]);
-    modal({ kind: 'result', eyebrow: '⚡ Rush Hour', title: 'A Rush Hour has started!', body: box,
-      back: function () { closeModal(); if (then) then(); },
-      actions: [{ label: 'Let’s go', icon: 'play', primary: true, run: function () { if (then) then(); } }] });
+    var go = function () { clearInterval(t); closeModal(); if (then) then(); };
+    modal({ kind: 'result', eyebrow: '⚡ Rush Hour', title: 'Rush Hour is starting!', body: box, back: go,
+      actions: [{ label: 'Let’s go', icon: 'play', primary: true, cls: 'match-go', run: go }] });
+    var btn = document.querySelector('#modal-actions .match-go'); if (btn) btn.disabled = true;
+    // Seats fill one by one: real players first (as they join live), then rivals.
+    var shown = 1, rows = raceStandings(race).filter(function (r) { return !r.me; });
+    var t = setInterval(function () {
+      if (!box.isConnected) { clearInterval(t); return; }
+      shown = Math.min(total, shown + 1 + Math.floor(Math.random() * 2));
+      num.textContent = shown; A.select();
+      var r = rows[(shown - 2) % rows.length];
+      if (r && faces.children.length < 12) { var f = document.createElement('i'); f.textContent = r.name.charAt(0).toUpperCase(); f.style.background = r.color; if (r.real) f.className = 'live'; faces.appendChild(f); }
+      if (shown >= total) {
+        clearInterval(t);
+        var realN = (race._players || []).length;
+        status.textContent = total + ' players matched' + (realN ? ' · ' + realN + ' racing live' : '') + '. Win ' + RUSH_WINS + ' levels in a row within ' + RUSH_MIN +
+          ' minutes; one lost board and you are out. Top 3 win ' + RUSH_PRIZES.join(' / ') + ' coins plus bonus hints and shuffles.';
+        box.querySelector('.match-ring').classList.add('done');
+        faces.replaceWith(raceList(race, 5));
+        if (btn) btn.disabled = false;
+        A.win(); toast('⚡ The race has started!', 1800);
+      }
+    }, 140);
   }
   function raceList(race, limit) {
     var rows = raceStandings(race), ol = document.createElement('ol'); ol.className = 'race-list';
@@ -900,7 +927,7 @@
     if (race.live) Live.report(race.live, { streak: race.streak, out: false });
     return '⚡ Rush Hour: ' + race.streak + ' / ' + RUSH_WINS + ' wins in a row · ' + ordinal(racePlace(race)) + ' place';
   }
-  function rushNoteEl(text) { var d = document.createElement('div'); d.className = 'rush-banner'; d.innerHTML = '<b>⚡</b><span></span>'; d.lastChild.textContent = text.replace(/^⚡ /, ''); return d; }
+  function rushNoteEl(text, mark) { var d = document.createElement('div'); d.className = 'rush-banner'; d.innerHTML = '<b></b><span></span>'; d.firstChild.textContent = mark || '⚡'; d.lastChild.textContent = text.replace(/^⚡ /, ''); return d; }
   function refreshRushCard() {
     var c = $('btn-rush'); if (!c) return;
     settleRace();
@@ -1046,6 +1073,13 @@
       coins = G.mode === 'daily' ? 40 + 5 * Math.min(10, store.streak.n || 0) : 10 + 5 * stars + Math.floor((G.level || 0) / 100);
       if (!firstClear) coins = Math.ceil(coins / 2);
       addCoins(coins);
+      // Hints and shuffles are earned on first clears only (replays cannot farm them).
+      var eh = 0, es = 0;
+      if (firstClear) {
+        if (G.mode === 'daily') { eh = 1; es = 1; }
+        else { if (stars === 3) eh = 1; if (G.level % 10 === 0) es = 1; }
+      }
+      if (eh || es) addBank(eh, es);
     }
     grid = G.limit
       ? resultGrid([['Score', G.score, 'score'], ['Time left', fmtTime(G.timeLeft), 'clock'], ['Best combo', '×' + G.bestCombo, 'combo'], ['Time bonus', '+' + bonus, 'bonus']])
@@ -1057,6 +1091,13 @@
       tw.appendChild(tot); tw.appendChild(grid); grid = tw;
     }
     if (coins) grid = withDoubleCoins(grid, coins);
+    if (eh || es) {
+      var ew = document.createElement('div'); ew.className = 'result-wrap';
+      var why = G.mode === 'daily' ? ['+1 hint and +1 shuffle for the daily board']
+        : [eh ? '+1 hint for a flawless clear' : '', es ? '+1 shuffle for reaching level ' + fmt(G.level) : ''].filter(Boolean);
+      ew.appendChild(rushNoteEl('Earned ' + why.join(', '), '🎁'));
+      ew.appendChild(grid); grid = ew;
+    }
     confetti.burst(stars === 3 ? 220 : 120); setHeat(0); buzz([20, 40, 20, 40, 60]);
     if (G.duel === 'race') {
       Net.send({ t: 'done', score: G.score });
@@ -1803,7 +1844,7 @@
         '<div class="art art-free"><div class="art-row">' + t('中', 'red ok') + t('發', 'green no') + t('北', 'ok') + '</div><div class="art-top">' + t('西', 'ok') + '</div></div>'],
       ['Chain combos', 'Make your next match within 5 seconds to grow the multiplier, up to ×12.',
         '<div class="art art-combo"><b>×2</b><b>×5</b><b>×9</b><b class="hot">×12</b></div>'],
-      ['Don\'t get stuck', 'No clock: take your time. Every level gives 3 hints and 2 shuffles. Need more? Watch a short video, or win extras in Rush Hour.',
+      ['Don\'t get stuck', 'No clock: take your time. You start with 3 hints and 2 shuffles. Earn more with flawless wins, every 10th level, the daily board and Rush Hour, or watch a short video.',
         '<div class="art art-clock"><div class="art-chips"><span>? Hint</span><span>⇄ Shuffle</span><span>▶ +2</span></div></div>'],
       ['Rush Hour', 'From level 30 a Rush Hour starts at random while you play: 25 players race to win 7 levels in a row. Lose one and you are out. Top 3 win big.',
         '<div class="art art-combo"><b>⚡1</b><b>⚡4</b><b class="hot">⚡7</b></div>'],
