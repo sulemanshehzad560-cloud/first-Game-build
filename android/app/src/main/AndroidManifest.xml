@@ -4,6 +4,11 @@
 
     <!-- Reach every device: touch is optional (Chromebooks, keyboards, mice) -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- The game is portrait-only; without these, Play treats portrait (and other implied hardware) as required
+         and hides the app from Chromebooks, TVs-with-touch and landscape-docked tablets. -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.faketouch" android:required="false" />
 
     <application
         android:largeHeap="true"
