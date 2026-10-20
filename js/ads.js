@@ -72,6 +72,33 @@
   var onClose = null, earned = false;
   function closed() { var fn = onClose; onClose = null; if (fn) fn(earned); }
 
+  // Apple's tracking prompt. iOS only shows it while the app is active and on screen, so wait for that
+  // (plus a moment for the launch animation); ask again on the next return to the app if it was missed.
+  function askTracking() {
+    function whenActive() {
+      return new Promise(function (resolve) {
+        if (global.document.visibilityState === 'visible') return setTimeout(resolve, 800);
+        global.document.addEventListener('visibilitychange', function on() {
+          if (global.document.visibilityState !== 'visible') return;
+          global.document.removeEventListener('visibilitychange', on); setTimeout(resolve, 800);
+        });
+      });
+    }
+    return whenActive().then(function () { return AdMob.trackingAuthorizationStatus(); }).then(function (r) {
+      if (!r || r.status !== 'notDetermined') return r;
+      return AdMob.requestTrackingAuthorization().then(function () { return AdMob.trackingAuthorizationStatus(); }).then(function (r2) {
+        if (r2 && r2.status === 'notDetermined') {
+          global.document.addEventListener('visibilitychange', function again() {
+            if (global.document.visibilityState !== 'visible') return;
+            global.document.removeEventListener('visibilitychange', again);
+            setTimeout(function () { AdMob.requestTrackingAuthorization().catch(function () {}); }, 800);
+          });
+        }
+        return r2;
+      });
+    });
+  }
+
   function init() {
     if (!Shell || !Shell.isNative) return;
     try { AdMob = global.Capacitor.registerPlugin('AdMob'); } catch (e) { return; }
@@ -81,19 +108,18 @@
       inter.unit = testing ? cfg.testInterstitialId : cfg.interstitialId;
       rewarded.unit = testing ? cfg.testRewardedId : cfg.rewardedId;
       rewInter.unit = testing ? cfg.testRewardedInterstitialId : cfg.rewardedInterstitialId;
+      // A consent form that fails to open must never stop what follows (the tracking prompt, the ads).
       return AdMob.requestConsentInfo().then(function (info) {
         privacyRequired = info.privacyOptionsRequirementStatus === 'REQUIRED';
-        if (info.status === 'REQUIRED' && info.isConsentFormAvailable) return AdMob.showConsentForm();
+        if (info.status === 'REQUIRED' && info.isConsentFormAvailable) return AdMob.showConsentForm().catch(function () { return null; });
         return info;
-      }, function () { return null; });
+      }).catch(function () { return null; });
     }).then(function () {
-      // iOS: Apple's App Tracking Transparency prompt, after the consent form.
+      // iOS: Apple's App Tracking Transparency prompt, after the consent form and before any ad is requested.
       if (!ios) return null;
       // The recorded demo (debug builds only) asks at the end of its tour, so the prompt does not cover the video.
       var after = demo ? new Promise(function (r) { global.addEventListener('jade-demo-done', r, { once: true }); }) : Promise.resolve();
-      return after.then(function () { return AdMob.trackingAuthorizationStatus(); }).then(function (r) {
-        if (r && r.status === 'notDetermined') return AdMob.requestTrackingAuthorization();
-      }, function () { /* Android: not applicable */ });
+      return after.then(askTracking).catch(function () { return null; });
     }).then(function () {
       return AdMob.initialize({ initializeForTesting: testing });
     }).then(function () {

@@ -9,6 +9,10 @@ on:
         description: Upload the signed iOS build to App Store Connect (TestFlight)
         type: boolean
         default: false
+      ios_version:
+        description: iOS version number (leave empty for VERSION_NAME; use the App Store version being resubmitted, e.g. 1.0.0)
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -242,9 +246,12 @@ jobs:
           ADMOB_IOS_INTERSTITIAL_ID: ${{ vars.ADMOB_IOS_INTERSTITIAL_ID }}
           # Uploading needs the owner's go-ahead: only a manual run with "upload_ios" ticked sends the build to Apple.
           UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_ios }}
+          IOS_VERSION: ${{ inputs.ios_version }}
         run: |
           set -eo pipefail
           CODE=$((1000 + GITHUB_RUN_NUMBER))
+          [ -n "$IOS_VERSION" ] && VERSION_NAME="$IOS_VERSION"
+          echo "iOS version $VERSION_NAME, build $CODE"
           KEY_DIR="$HOME/.appstoreconnect/private_keys"; mkdir -p "$KEY_DIR"
           printf '%s' "$ASC_KEY_P8" > "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
