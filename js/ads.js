@@ -35,6 +35,10 @@
   };
   var Shell = global.NativeShell, AdMob = null, LP = null, ready = false, testing = true, ios = false, demo = false;
   var boardsSinceAd = 0, lastAdAt = 0, privacyRequired = false, consentOk = true;
+  var diag = { stage: 'not started', error: '', inter: '', rewarded: '' };   // shown on the hidden ad-status screen
+  function errText(e) { return (e && (e.message || e.errorMessage)) || String(e); }
+  /** A promise that settles within ms either way (a hung consent call must not block the ads). */
+  function within(p, ms, fallback) { return Promise.race([p, new Promise(function (r) { setTimeout(function () { r(fallback); }, ms); })]); }
 
   /** One ad format: load ahead, retry with back-off (10 s, 20 s, 40 s ... up to 3 min), reload after showing. */
   function Slot(name, prepare) {
@@ -45,10 +49,13 @@
     var self = this;
     if (!ready || !this.unit || this.loaded || this.loading) return;
     this.loading = true; clearTimeout(this.timer);
+    if (diag[this.name] !== undefined) diag[this.name] = 'loading';
     this.prepare({ adId: this.unit, isTesting: testing, immersiveMode: true }).then(function () {
       self.loaded = true; self.loading = false; self.fails = 0;
-    }, function () {
+      if (diag[self.name] !== undefined) diag[self.name] = 'ready';
+    }, function (e) {
       self.loading = false; self.fails++;
+      if (diag[self.name] !== undefined) diag[self.name] = 'failed x' + self.fails + ': ' + errText(e);
       self.timer = setTimeout(function () { self.load(); }, Math.min(180000, 10000 * Math.pow(2, self.fails - 1)));
     });
   };
@@ -68,7 +75,7 @@
     });
   };
 
-  var inter = new Slot('interstitial', function (o) { return LP ? LP.loadInterstitial() : AdMob.prepareInterstitial(o); });
+  var inter = new Slot('inter', function (o) { return LP ? LP.loadInterstitial() : AdMob.prepareInterstitial(o); });
   var rewarded = new Slot('rewarded', function (o) { return LP ? LP.loadRewarded() : AdMob.prepareRewardVideoAd(o); });
   var rewInter = new Slot('rewarded-interstitial', function (o) { return AdMob.prepareRewardInterstitialAd(o); });
   function showInter() { return LP ? LP.showInterstitial() : AdMob.showInterstitial(); }
@@ -125,7 +132,9 @@
         rewInter.unit = testing ? cfg.testRewardedInterstitialId : cfg.rewardedInterstitialId;
       }
       // A consent form that fails to open must never stop what follows (the tracking prompt, the ads).
-      return AdMob.requestConsentInfo().then(function (info) {
+      diag.stage = 'consent';
+      return within(AdMob.requestConsentInfo(), 10000, null).then(function (info) {
+        if (!info) return null;
         privacyRequired = info.privacyOptionsRequirementStatus === 'REQUIRED';
         if (info.status === 'REQUIRED' && info.isConsentFormAvailable) return AdMob.showConsentForm().catch(function () { return info; });
         return info;
@@ -143,11 +152,12 @@
     }).then(function () {
       if (LP) {
         var lp = CONFIG.levelplay;
+        diag.stage = 'LevelPlay init (consent ' + (consentOk ? 'yes' : 'no') + ')';
         return LP.init({ appKey: lp.appKey, interstitialId: lp.interstitialId, rewardedId: lp.rewardedId, consent: consentOk, debug: testing });
       }
       return AdMob.initialize({ initializeForTesting: testing });
     }).then(function () {
-      ready = true;
+      ready = true; diag.stage = 'ready';
       if (LP) {
         LP.addListener('interstitialClosed', function () { inter.used(); closed(); });
         LP.addListener('rewardEarned', function () { earned = true; });
@@ -175,7 +185,7 @@
       global.document.addEventListener('visibilitychange', function () {
         if (global.document.visibilityState === 'visible') [inter, rewarded, rewInter].forEach(function (s) { if (!s.loaded) { s.fails = 0; s.load(); } });
       });
-    }).catch(function () { /* ads are optional; the game never depends on them */ });
+    }).catch(function (e) { diag.stage = 'failed'; diag.error = errText(e); /* ads are optional; the game never depends on them */ });
   }
 
   /** Show something full-screen; resolve when it closes (true if a reward was earned). */
@@ -230,6 +240,19 @@
         return present(rewarded, showRewardedAd);
       });
     },
+    /** Lines for the hidden ad-status screen (tap the version in Settings 5 times). */
+    diagnostics: function () {
+      return [
+        'Network: ' + (LP ? 'Unity LevelPlay' : (AdMob ? 'AdMob' : 'none (browser)')),
+        'Status: ' + diag.stage + (diag.error ? ' - ' + diag.error : ''),
+        'Interstitial: ' + (diag.inter || 'not requested yet'),
+        'Rewarded: ' + (diag.rewarded || 'not requested yet')
+      ];
+    },
+    canTestSuite: function () { return !!LP; },
+    testSuite: function () { return LP ? LP.testSuite() : Promise.reject(new Error('no LevelPlay')); },
+    /** Retry every ad load now. */
+    retry: function () { [inter, rewarded].forEach(function (s) { if (!s.loaded) { s.fails = 0; s.load(); } }); },
     hasPrivacyOptions: function () { return ready && privacyRequired; },
     showPrivacyOptions: function () { return AdMob ? AdMob.showPrivacyOptionsForm() : Promise.resolve(); },
     config: CONFIG

@@ -59,6 +59,7 @@ public class LevelPlayPlugin extends Plugin {
         onUi(() -> {
             try {
                 LevelPlay.setConsent(consent);
+                setMeta("is_test_suite", "enable");   // lets the hidden ad-status screen open the Test Suite
                 if (debug) LevelPlay.setAdaptersDebug(true);
                 LevelPlayInitRequest request = new LevelPlayInitRequest.Builder(appKey).build();
                 LevelPlay.init(getContext(), request, new LevelPlayInitListener() {
@@ -82,6 +83,24 @@ public class LevelPlayPlugin extends Plugin {
             } catch (Exception e) {
                 call.reject("LevelPlay init failed: " + e.getMessage());
             }
+        });
+    }
+
+    /** LevelPlay.setMetaData or the older IronSource.setMetaData, whichever this SDK has. */
+    private static void setMeta(String key, String value) {
+        for (String cls : new String[]{"com.unity3d.mediation.LevelPlay", "com.ironsource.mediationsdk.IronSource"}) {
+            try {
+                Class.forName(cls).getMethod("setMetaData", String.class, String.class).invoke(null, key, value);
+                return;
+            } catch (Throwable ignored) { }
+        }
+    }
+
+    @PluginMethod
+    public void testSuite(PluginCall call) {
+        onUi(() -> {
+            try { LevelPlay.launchTestSuite(getContext()); call.resolve(); }
+            catch (Throwable e) { call.reject("Test Suite unavailable: " + e.getMessage()); }
         });
     }
 

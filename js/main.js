@@ -35,6 +35,20 @@
     if (typeof refreshSkyHint === 'function') { refreshSkyHint(); board.resize(); demo.resize(); sky.resize(); }
   }
 
+  function adStatus(after) {
+    var box = document.createElement('div'); box.className = 'settings';
+    var pre = document.createElement('p'); pre.style.whiteSpace = 'pre-wrap'; pre.style.userSelect = 'text'; pre.style.fontSize = '13px';
+    var draw = function () { pre.textContent = Ads.diagnostics ? Ads.diagnostics().join('\n\n') : 'n/a'; };
+    draw(); var iv = setInterval(draw, 1000);
+    box.appendChild(pre);
+    var end = function () { clearInterval(iv); closeModal(); if (after) after(); };
+    var again = function () { clearInterval(iv); adStatus(after); };   // modal buttons close the sheet; reopen it
+    var actions = [{ label: 'Retry loads', run: function () { if (Ads.retry) Ads.retry(); again(); } }];
+    if (Ads.canTestSuite && Ads.canTestSuite()) actions.push({ label: 'Test Suite', run: function () { Ads.testSuite().catch(function (e) { toast(String(e && e.message || e), 3000); }); again(); } });
+    actions.push({ label: 'Close', primary: true, run: end });
+    modal({ kind: 'settings', title: 'Ad status', body: box, back: end, actions: actions });
+  }
+
   // ------------------------------------------------------------- tile sets, juice
   var THEMES = window.MahjongTiles.THEMES, TILESETS = window.MahjongTiles.TILESETS;
   var MAX = M.MAX_LEVEL;
@@ -1678,8 +1692,27 @@
     if (Ads.hasPrivacyOptions()) box.appendChild(linkRow('Ad privacy choices', function () { Ads.showPrivacyOptions(); }, 'ad'));
     var ver = document.createElement('p'); ver.className = 'version'; ver.textContent = 'Jade Rush';
     Shell.versionName().then(function (v) { ver.textContent = 'Jade Rush ' + (v === 'web' ? '· web' : v); });
+    var taps = 0, tapT = 0;   // hidden: tap the version 5 times for the ad-status screen
+    ver.addEventListener('click', function () {
+      var now = Date.now(); taps = now - tapT < 800 ? taps + 1 : 1; tapT = now;
+      if (taps >= 5) { taps = 0; closeModal(); adStatus(done); }
+    });
     box.appendChild(ver);
     modal({ kind: 'settings', title: 'Settings', body: box, back: function () { closeModal(); done(); }, actions: [{ label: 'Done', primary: true, run: done }] });
+  }
+
+  function adStatus(after) {
+    var box = document.createElement('div'); box.className = 'settings';
+    var pre = document.createElement('p'); pre.style.whiteSpace = 'pre-wrap'; pre.style.userSelect = 'text'; pre.style.fontSize = '13px';
+    var draw = function () { pre.textContent = Ads.diagnostics ? Ads.diagnostics().join('\n\n') : 'n/a'; };
+    draw(); var iv = setInterval(draw, 1000);
+    box.appendChild(pre);
+    var end = function () { clearInterval(iv); closeModal(); if (after) after(); };
+    var again = function () { clearInterval(iv); adStatus(after); };   // modal buttons close the sheet; reopen it
+    var actions = [{ label: 'Retry loads', run: function () { if (Ads.retry) Ads.retry(); again(); } }];
+    if (Ads.canTestSuite && Ads.canTestSuite()) actions.push({ label: 'Test Suite', run: function () { Ads.testSuite().catch(function (e) { toast(String(e && e.message || e), 3000); }); again(); } });
+    actions.push({ label: 'Close', primary: true, run: end });
+    modal({ kind: 'settings', title: 'Ad status', body: box, back: end, actions: actions });
   }
 
   // ------------------------------------------------------------- tile sets
