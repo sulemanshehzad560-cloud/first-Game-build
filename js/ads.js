@@ -1,5 +1,7 @@
 /*
- * AdMob for the Android and iPhone apps (no-op on the web). Debug builds always use Google's test ads.
+ * Ads for the Android and iPhone apps (no-op on the web).
+ *   Android: Unity LevelPlay mediation (native LevelPlayPlugin; Unity Ads, Meta and other networks bid).
+ *   iPhone:  Google AdMob (debug builds use Google's test ads).
  *
  * Between levels (from level 2, after every finished board, at least 40 s apart):
  *   1. a rewarded interstitial, announced first by the game's own intro card with a countdown and a
@@ -25,12 +27,14 @@
       rewardedId: 'ca-app-pub-4940350948200557/4373692913', testRewardedId: 'ca-app-pub-3940256099942544/1712485313',
       rewardedInterstitialId: 'ca-app-pub-4940350948200557/6605545523', testRewardedInterstitialId: 'ca-app-pub-3940256099942544/6978759866'
     },
+    // Unity LevelPlay (Android). The after-level bonus uses the rewarded unit.
+    levelplay: { appKey: '2934e878d', interstitialId: 'gc07ub49uhc3va35', rewardedId: 'y9qvb7kulzine8sx' },
     boardsBetweenAds: 1,
     minGapMs: 40000,
     firstLevelWithAds: 2
   };
-  var Shell = global.NativeShell, AdMob = null, ready = false, testing = true, ios = false, demo = false;
-  var boardsSinceAd = 0, lastAdAt = 0, privacyRequired = false;
+  var Shell = global.NativeShell, AdMob = null, LP = null, ready = false, testing = true, ios = false, demo = false;
+  var boardsSinceAd = 0, lastAdAt = 0, privacyRequired = false, consentOk = true;
 
   /** One ad format: load ahead, retry with back-off (10 s, 20 s, 40 s ... up to 3 min), reload after showing. */
   function Slot(name, prepare) {
@@ -64,9 +68,14 @@
     });
   };
 
-  var inter = new Slot('interstitial', function (o) { return AdMob.prepareInterstitial(o); });
-  var rewarded = new Slot('rewarded', function (o) { return AdMob.prepareRewardVideoAd(o); });
+  var inter = new Slot('interstitial', function (o) { return LP ? LP.loadInterstitial() : AdMob.prepareInterstitial(o); });
+  var rewarded = new Slot('rewarded', function (o) { return LP ? LP.loadRewarded() : AdMob.prepareRewardVideoAd(o); });
   var rewInter = new Slot('rewarded-interstitial', function (o) { return AdMob.prepareRewardInterstitialAd(o); });
+  function showInter() { return LP ? LP.showInterstitial() : AdMob.showInterstitial(); }
+  function showRewardedAd() { return LP ? LP.showRewarded() : AdMob.showRewardVideoAd(); }
+  // The after-level bonus video: AdMob's rewarded interstitial on iPhone, LevelPlay's rewarded unit on Android.
+  function bonusSlot() { return LP ? rewarded : rewInter; }
+  function showBonus() { return LP ? LP.showRewarded() : AdMob.showRewardInterstitialAd(); }
 
   // What happens when the ad on screen closes: set by whoever opened it.
   var onClose = null, earned = false;
@@ -105,15 +114,26 @@
     Shell.buildInfo().then(function (bi) {
       testing = bi.debug; ios = bi.platform === 'ios'; demo = !!bi.demo;
       var cfg = ios ? CONFIG.ios : CONFIG.android;
-      inter.unit = testing ? cfg.testInterstitialId : cfg.interstitialId;
-      rewarded.unit = testing ? cfg.testRewardedId : cfg.rewardedId;
-      rewInter.unit = testing ? cfg.testRewardedInterstitialId : cfg.rewardedInterstitialId;
+      if (!ios) {
+        try { LP = global.Capacitor.registerPlugin('LevelPlayAds'); } catch (e) { LP = null; }
+      }
+      if (LP) {   // LevelPlay picks the network; the unit IDs only tell the slots they are configured
+        inter.unit = CONFIG.levelplay.interstitialId; rewarded.unit = CONFIG.levelplay.rewardedId; rewInter.unit = '';
+      } else {
+        inter.unit = testing ? cfg.testInterstitialId : cfg.interstitialId;
+        rewarded.unit = testing ? cfg.testRewardedId : cfg.rewardedId;
+        rewInter.unit = testing ? cfg.testRewardedInterstitialId : cfg.rewardedInterstitialId;
+      }
       // A consent form that fails to open must never stop what follows (the tracking prompt, the ads).
       return AdMob.requestConsentInfo().then(function (info) {
         privacyRequired = info.privacyOptionsRequirementStatus === 'REQUIRED';
-        if (info.status === 'REQUIRED' && info.isConsentFormAvailable) return AdMob.showConsentForm().catch(function () { return null; });
+        if (info.status === 'REQUIRED' && info.isConsentFormAvailable) return AdMob.showConsentForm().catch(function () { return info; });
         return info;
       }).catch(function () { return null; });
+    }).then(function (info) {
+      // LevelPlay follows the same consent answer (personalised ads only when allowed).
+      consentOk = !info || info.canRequestAds !== false;
+      return info;
     }).then(function () {
       // iOS: Apple's App Tracking Transparency prompt, after the consent form and before any ad is requested.
       if (!ios) return null;
@@ -121,9 +141,24 @@
       var after = demo ? new Promise(function (r) { global.addEventListener('jade-demo-done', r, { once: true }); }) : Promise.resolve();
       return after.then(askTracking).catch(function () { return null; });
     }).then(function () {
+      if (LP) {
+        var lp = CONFIG.levelplay;
+        return LP.init({ appKey: lp.appKey, interstitialId: lp.interstitialId, rewardedId: lp.rewardedId, consent: consentOk, debug: testing });
+      }
       return AdMob.initialize({ initializeForTesting: testing });
     }).then(function () {
       ready = true;
+      if (LP) {
+        LP.addListener('interstitialClosed', function () { inter.used(); closed(); });
+        LP.addListener('rewardEarned', function () { earned = true; });
+        LP.addListener('rewardedClosed', function () { rewarded.used(); closed(); });
+        setTimeout(function () { inter.load(); }, 3000);
+        setTimeout(function () { rewarded.load(); }, 6000);
+        global.document.addEventListener('visibilitychange', function () {
+          if (global.document.visibilityState === 'visible') [inter, rewarded].forEach(function (s) { if (!s.loaded) { s.fails = 0; s.load(); } });
+        });
+        return;
+      }
       AdMob.addListener('interstitialAdDismissed', function () { inter.used(); closed(); });
       AdMob.addListener('interstitialAdFailedToShow', function () { inter.used(); closed(); });
       AdMob.addListener('onRewardedVideoAdReward', function () { earned = true; });
@@ -156,7 +191,7 @@
 
   global.GameAds = {
     /** Count a finished board (win or loss). */
-    boardFinished: function () { boardsSinceAd++; [inter, rewInter].forEach(function (s) { if (!s.loaded) s.load(); }); },
+    boardFinished: function () { boardsSinceAd++; [inter, bonusSlot()].forEach(function (s) { if (s.unit && !s.loaded) s.load(); }); },
     /**
      * Run next() after the between-levels ad, if one is due.
      * opts.intro(cb): show the reward intro card; cb(true) to watch, cb(false) to decline.
@@ -168,12 +203,13 @@
       if (!due) { next(); return; }
       var plain = function () {
         if (!inter.loaded) { next(); return; }
-        present(inter, function () { return AdMob.showInterstitial(); }).then(function () { next(); });
+        present(inter, showInter).then(function () { next(); });
       };
-      if (rewInter.loaded && opts.intro) {
+      var bonus = bonusSlot();
+      if (bonus.loaded && opts.intro) {
         opts.intro(function (watch) {
           if (!watch) { plain(); return; }
-          present(rewInter, function () { return AdMob.showRewardInterstitialAd(); }).then(function (ok) {
+          present(bonus, showBonus).then(function (ok) {
             if (ok && opts.onReward) opts.onReward();
             next();
           });
@@ -191,7 +227,7 @@
       if (!ready) return Promise.resolve(false);
       return rewarded.waitReady(8000).then(function (ok) {
         if (!ok) return false;
-        return present(rewarded, function () { return AdMob.showRewardVideoAd(); });
+        return present(rewarded, showRewardedAd);
       });
     },
     hasPrivacyOptions: function () { return ready && privacyRequired; },

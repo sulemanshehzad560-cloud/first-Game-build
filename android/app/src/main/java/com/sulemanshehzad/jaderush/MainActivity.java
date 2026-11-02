@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(BuildInfoPlugin.class);
         registerPlugin(GameServicesPlugin.class);
+        registerPlugin(LevelPlayPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
