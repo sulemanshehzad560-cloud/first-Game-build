@@ -75,7 +75,7 @@ mahjong,solitaire,tiles,matching,board,puzzle,brain,classic,shanghai,duel,daily,
 
 **App icon**: comes from the build (1024 × 1024, no transparency).
 
-**Support URL**: `https://github.com/sulemanshehzad560-cloud/first-Game-build` (or your own site). **Marketing URL**: optional. **Privacy policy URL**: `https://sulemanshehzad560-cloud.github.io/first-Game-build/privacy.html` (turn on GitHub Pages and add your contact email first).
+**Support URL** and **Marketing URL**: `https://sulemanshehzad560-cloud.github.io` (both). AdMob verifies the iOS app by reading `app-ads.txt` at the root of this domain, so neither may point to github.com or another domain. **Privacy policy URL**: `https://sulemanshehzad560-cloud.github.io/first-Game-build/privacy.html` (turn on GitHub Pages and add your contact email first).
 
 **Copyright**: `2026 Suleman Shehzad` (use the name or company on your developer account).
 
